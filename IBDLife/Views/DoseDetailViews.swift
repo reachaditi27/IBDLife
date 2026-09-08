@@ -3,18 +3,20 @@ import SwiftUI
 struct UpcomingDoseDetailView: View {
     let dose: ScheduledDose
     var encouragement = "This moment of self-care matters more than you know."
-    var body: some View { DoseDetailContent(dose: dose, isToday: false, encouragement: encouragement) }
+    var body: some View { DoseDetailContent(dose: dose, encouragement: encouragement) }
 }
 
 struct DoseDayView: View {
     let dose: ScheduledDose
     var onRecorded: (() -> Void)? = nil
-    var body: some View { DoseDetailContent(dose: dose, isToday: true, onRecorded: onRecorded) }
+    var body: some View { DoseDetailContent(dose: dose, onRecorded: onRecorded) }
 }
 
 private struct DoseDetailContent: View {
     let dose: ScheduledDose
-    var isToday: Bool
+    private var isToday: Bool { Calendar.current.isDateInToday(dose.date) }
+    private var isPast: Bool { dose.date < Calendar.current.startOfDay(for: Date()) }
+    private var isRecorded: Bool { onboarding.doseRecords.contains { $0.id == dose.id } }
     var encouragement = "Every dose is an act of strength. You're doing this."
     var onRecorded: (() -> Void)? = nil
     @EnvironmentObject var onboarding: OnboardingData
@@ -24,7 +26,7 @@ private struct DoseDetailContent: View {
             VStack(alignment: .leading, spacing: 12) {
                 AppSectionLabel(title: (isToday ? "Today · " : "") + dose.date.formatted(.dateTime.month(.wide).day().year()))
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(isToday ? "It's dose day" : "Upcoming dose").font(AppStyle.serif(36))
+                    Text(isPast ? "Past scheduled dose" : isToday ? "It's dose day" : "Upcoming dose").font(AppStyle.serif(36))
                     Text("you've got this.").font(AppStyle.italic(36))
                 }
             }
@@ -42,13 +44,16 @@ private struct DoseDetailContent: View {
                         Text([plan.medication?.genericName, plan.medication?.category.title.capitalized].compactMap { $0 }.joined(separator: " · "))
                             .font(.system(size: 14)).foregroundStyle(AppStyle.muted)
                         Text(plan.frequency?.title ?? "Schedule not set").font(.system(size: 14)).foregroundStyle(AppStyle.muted)
+                        if (plan.frequency?.dosesPerDay ?? 1) > 1 {
+                            Text(dose.timeLabel + " dose").font(.system(size: 14, weight: .medium))
+                        }
                     }
                 }
             }
             if let site = dose.site {
                 AppCard {
                     VStack(alignment: .leading, spacing: 22) {
-                        AppSectionLabel(title: "Today's injection site")
+                        AppSectionLabel(title: isToday ? "Today's injection site" : "Injection site")
                         HStack(spacing: 18) {
                             InjectionSiteIllustration(site: site).frame(width: 105, height: 190)
                             VStack(alignment: .leading, spacing: 10) {
@@ -85,9 +90,15 @@ private struct DoseDetailContent: View {
                     }
                 }
             }
-            if isToday {
+            if isRecorded {
+                EmptyMessage(title: "Dose recorded", detail: "This dose is already in your history.")
+            } else if isToday || isPast {
                 VStack(spacing: 6) {
-                    NavigationLink { DoseConfirmationView(dose: dose, onRecorded: onRecorded) } label: { AppActionLabel(title: "I'm ready") }
+                    if isPast {
+                        Text("Record a dose you already took. This is not an instruction to take an extra dose.")
+                            .font(.subheadline).foregroundStyle(AppStyle.muted)
+                    }
+                    NavigationLink { DoseConfirmationView(dose: dose, onRecorded: onRecorded) } label: { AppActionLabel(title: isPast ? "Record a taken dose" : "I'm ready") }
                     NavigationLink("I need a moment") { SupportMomentView() }
                         .font(.system(size: 14)).foregroundStyle(AppStyle.muted)
                         .frame(maxWidth: .infinity, minHeight: 44)
@@ -104,11 +115,14 @@ struct DoseConfirmationView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var selectedSite: InjectionSite?
     @State private var recorded = false
+    @State private var takenDate = Date()
     var body: some View {
         AppPage(title: recorded ? "Dose recorded" : "Have you taken\nyour dose?") {
             if recorded {
                 EmptyMessage(title: "All done!", detail: "Your dose has been added to your history.")
-                Button { onRecorded?() } label: { AppActionLabel(title: "Back to home") }
+                Button { if let onRecorded { onRecorded() } else { dismiss() } } label: {
+                    AppActionLabel(title: onRecorded == nil ? "Back to dose" : "Back to home")
+                }
             } else {
                 Text("Only confirm once you've taken your medication. Being ready doesn't record a dose.")
                     .font(.system(size: 15)).foregroundStyle(AppStyle.muted).lineSpacing(5)
@@ -117,6 +131,14 @@ struct DoseConfirmationView: View {
                         Text(onboarding.plan(for: dose.treatmentID).medication?.brandName ?? dose.treatmentID)
                             .font(AppStyle.serif(24))
                         Text(dose.date.formatted(date: .long, time: .omitted)).font(.system(size: 14)).foregroundStyle(AppStyle.muted)
+                        if (onboarding.plan(for: dose.treatmentID).frequency?.dosesPerDay ?? 1) > 1 {
+                            Text(dose.timeLabel + " dose").font(.system(size: 14, weight: .medium))
+                        }
+                        if dose.date < Calendar.current.startOfDay(for: Date()) {
+                            DatePicker("Date taken", selection: $takenDate,
+                                       in: dose.date...Date(), displayedComponents: .date)
+                                .tint(AppStyle.green)
+                        }
                         if dose.site != nil {
                             Picker("Site used", selection: $selectedSite) {
                                 ForEach(onboarding.plan(for: dose.treatmentID).sites) { site in
@@ -127,14 +149,17 @@ struct DoseConfirmationView: View {
                     }
                 }
                 Button {
-                    onboarding.recordDose(dose, site: selectedSite)
+                    onboarding.recordDose(dose, site: selectedSite, at: takenDate)
                     recorded = true
                     onRecorded?()
                 } label: { AppActionLabel(title: "Yes, I've taken my dose", systemImage: "checkmark") }
                 Button("Not yet") { dismiss() }.font(.system(size: 15)).foregroundStyle(AppStyle.muted)
                     .frame(maxWidth: .infinity, minHeight: 44)
             }
-        }.onAppear { selectedSite = dose.site }
+        }.onAppear {
+            selectedSite = dose.site
+            takenDate = Calendar.current.isDateInToday(dose.date) ? Date() : dose.date
+        }
     }
 }
 

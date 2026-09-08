@@ -66,6 +66,48 @@ struct ModelChecks {
         precondition(restored.doseRecords.count == 1 && restored.plan(for: "humira").dosesRemaining == 1)
         precondition(restored.doses(from: today, through: today).count == 2, "Recorded dose stays recorded after relaunch")
         precondition(restored.storageError == nil)
+        // An already-taken morning/afternoon dose must leave later slots today available.
+        let partial = OnboardingData(fileURL: nil)
+        partial.configureSchedule(id: "ensure plus", frequency: .twiceDaily, date: today,
+                                  alreadyTaken: true, lastTakenSlot: 0)
+        let evening = partial.doses(from: today, through: today)
+        precondition(evening.map(\.slot) == [2] && evening.first?.ordinal == 2)
+        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: today)!
+        precondition(partial.doses(from: tomorrow, through: tomorrow).map(\.ordinal) == [3, 4])
+        partial.configureSchedule(id: "ensure plus", frequency: .threeTimesDaily, date: today,
+                                  alreadyTaken: true, lastTakenSlot: 1)
+        precondition(partial.doses(from: today, through: today).map(\.slot) == [2])
+        partial.configureSchedule(id: "ensure plus", frequency: .twiceDaily, date: today,
+                                  alreadyTaken: true, lastTakenSlot: 2)
+        precondition(partial.doses(from: today, through: today).isEmpty)
+        precondition(partial.doses(from: tomorrow, through: tomorrow).map(\.slot) == [0, 2])
+        // Version-1 plans without new optional fields still load with their original schedule.
+        let oldPlan = Data(#"{"id":"humira","forms":[],"sites":[]}"#.utf8)
+        let decoded = try JSONDecoder().decode(TreatmentPlan.self, from: oldPlan)
+        precondition(decoded.startSlot == nil && decoded.lastTakenSlot == nil)
+        let roundTrip = try JSONDecoder().decode(TreatmentPlan.self, from: JSONEncoder().encode(partial.plan(for: "ensure plus")))
+        precondition(roundTrip.lastTakenSlot == 2)
+        // The actual site overrides the forecast and does not affect another treatment.
+        plan.frequency = .everyTwoWeeks; plan.startDate = september
+        plan.sites = [.leftAbdomen, .rightAbdomen, .leftThigh, .rightThigh]
+        let override = DoseRecord(id: doses[0].id, treatmentID: plan.id, scheduledDate: september,
+                                  recordedDate: september, site: .leftThigh, doseNumber: 1)
+        let rotated = DoseSchedule.doses(for: plan, from: september, through: date(2026, 10, 6),
+                                        records: [override], calendar: calendar)
+        precondition(rotated.map(\.site) == [.leftThigh, .rightThigh, .leftAbdomen])
+        precondition(rotated.map(\.id) == doses.map(\.id), "Site changes do not change dose identities")
+        let isolated = DoseSchedule.doses(for: plan, from: september, through: september,
+                                         records: [DoseRecord(id: "other", treatmentID: "other", scheduledDate: september,
+                                                              recordedDate: september, site: .rightThigh, doseNumber: 1)], calendar: calendar)
+        precondition(isolated.first?.site == .leftAbdomen)
+        let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: today)!
+        partial.configureSchedule(id: "ensure plus", frequency: .twiceDaily, date: yesterday, alreadyTaken: false)
+        let overdue = partial.unrecordedPastDoses()
+        precondition(overdue.count == 2 && overdue.allSatisfy { $0.date < today })
+        partial.recordDose(overdue[0], site: nil, at: yesterday)
+        precondition(partial.unrecordedPastDoses().count == 1)
+        precondition(partial.doseRecords.last?.recordedDate == yesterday, "Historical entry keeps actual date taken")
+        precondition(partial.doses(from: today, through: today).count == 2, "Historical entry leaves today's slots intact")
         print("PASS: recurrence, DST, per-day slots, site rotation, multiple treatments, explicit history, duplicate/future guards, refill counts, symptoms, and persistence")
     }
 }

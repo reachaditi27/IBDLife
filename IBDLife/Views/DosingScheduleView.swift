@@ -12,6 +12,7 @@ struct DosingScheduleView: View {
 
     @State private var selectedFrequency: DosingFrequency?
     @State private var hasTakenDose: Bool?
+    @State private var lastTakenSlot: Int?
     @State private var doseDate: Date = Date()
     @State private var showDatePicker = false
 
@@ -201,6 +202,18 @@ struct DosingScheduleView: View {
 
                     // MARK: Date
 
+                    if hasTakenDose == true, let selectedFrequency, selectedFrequency.dosesPerDay > 1 {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Which dose did you last take?").font(.subheadline.weight(.semibold))
+                            Picker("Last dose", selection: $lastTakenSlot) {
+                                Text("Choose a dose").tag(Optional<Int>.none)
+                                ForEach(selectedFrequency.slots, id: \.self) { slot in
+                                    Text(slot == 0 ? "Morning" : slot == 1 ? "Afternoon" : "Evening").tag(Optional(slot))
+                                }
+                            }.tint(.ibdGreen)
+                        }.padding(.top, 24)
+                    }
+
                     if let hasTakenDose {
 
                         Spacer()
@@ -333,8 +346,12 @@ struct DosingScheduleView: View {
         .onAppear {
             let plan = onboarding.plan(for: medication.id)
             selectedFrequency = plan.frequency
+            lastTakenSlot = plan.lastTakenSlot
             if let last = plan.lastDoseDate { hasTakenDose = true; doseDate = last }
             else if let next = plan.startDate { hasTakenDose = false; doseDate = next }
+        }
+        .onChange(of: selectedFrequency) { _, frequency in
+            if let lastTakenSlot, !(frequency?.slots.contains(lastTakenSlot) ?? false) { self.lastTakenSlot = nil }
         }
         .navigationDestination(isPresented: $showCompletion) { Step7PlaceholderView() }
         .navigationBarBackButtonHidden(true)
@@ -472,7 +489,8 @@ struct DosingScheduleView: View {
             Button {
                 onboarding.configureSchedule(id: medication.id, frequency: selectedFrequency,
                                              date: selectedFrequency == .asNeeded ? nil : doseDate,
-                                             alreadyTaken: selectedFrequency != .asNeeded && hasTakenDose == true)
+                                             alreadyTaken: selectedFrequency != .asNeeded && hasTakenDose == true,
+                                             lastTakenSlot: lastTakenSlot)
                 advance()
             } label: {
 
@@ -522,6 +540,7 @@ struct DosingScheduleView: View {
     private var canContinue: Bool {
 
         selectedFrequency == .asNeeded || (selectedFrequency != nil && hasTakenDose != nil &&
+            (hasTakenDose != true || (selectedFrequency?.dosesPerDay ?? 1) == 1 || lastTakenSlot != nil) &&
             (hasTakenDose == true ? doseDate <= Date() : doseDate >= Calendar.current.startOfDay(for: Date())))
     }
 }

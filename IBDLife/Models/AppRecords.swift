@@ -6,6 +6,9 @@ struct TreatmentPlan: Identifiable, Codable, Hashable {
     var frequency: DosingFrequency?
     var startDate: Date?
     var lastDoseDate: Date?
+    // Optional so existing version-1 saved plans still decode unchanged.
+    var startSlot: Int?
+    var lastTakenSlot: Int?
     var sites: [InjectionSite] = InjectionSite.allCases
     var dosesPerOrder: Int?
     var dosesRemaining: Int?
@@ -62,6 +65,13 @@ struct ScheduledDose: Identifiable, Hashable {
 }
 
 extension DosingFrequency {
+    var slots: [Int] {
+        switch self {
+        case .twiceDaily: [0, 2]
+        case .threeTimesDaily: [0, 1, 2]
+        default: [0]
+        }
+    }
     var intervalDays: Int? {
         switch self {
         case .onceDaily, .twiceDaily, .threeTimesDaily: 1
@@ -97,13 +107,25 @@ enum DoseSchedule {
         var index = elapsed / interval
         var result: [ScheduledDose] = []
         let baseline = plan.lastDoseDate == nil ? 0 : 1
+        let firstPosition = frequency.slots.firstIndex(of: plan.startSlot ?? 0) ?? 0
+        let siteRecords = records.filter { $0.treatmentID == plan.id && $0.site != nil }
         while let day = calendar.date(byAdding: .day, value: index * interval, to: start), day <= upper {
             if day >= lower {
                 for position in 0..<frequency.dosesPerDay {
-                    let slot = frequency == .twiceDaily && position == 1 ? 2 : position
-                    let offset = index * frequency.dosesPerDay + position
-                    let site = plan.isInjection && !plan.sites.isEmpty
+                    if index == 0 && position < firstPosition { continue }
+                    let slot = frequency.slots[position]
+                    let offset = index * frequency.dosesPerDay + position - firstPosition
+                    var site = plan.isInjection && !plan.sites.isEmpty
                         ? plan.sites[(offset + baseline) % plan.sites.count] : nil
+                    // Keep recorded sites immutable; subsequent suggestions follow actual use.
+                    if plan.isInjection, let previous = siteRecords.filter({
+                        $0.doseNumber < offset + baseline + 1 && $0.scheduledDate <= day
+                    }).max(by: { $0.recordedDate < $1.recordedDate }),
+                       let used = previous.site, let usedIndex = plan.sites.firstIndex(of: used) {
+                        site = plan.sites[(usedIndex + offset + baseline + 1 - previous.doseNumber) % plan.sites.count]
+                    }
+                    let doseID = "\(plan.id)-\(Int(day.timeIntervalSince1970))-\(slot)"
+                    if let actual = siteRecords.first(where: { $0.id == doseID }) { site = actual.site }
                     result.append(ScheduledDose(treatmentID: plan.id, date: day, slot: slot,
                                                 ordinal: offset + baseline + 1, site: site))
                 }

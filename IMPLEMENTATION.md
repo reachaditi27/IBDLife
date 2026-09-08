@@ -44,6 +44,48 @@ not pharmacy integration. Existing unused `ContentView` and `Step6PlaceholderVie
 are retained to avoid unrelated cleanup. The setup reminder wording predates actual
 notification support.
 
-## Current pass results
+## September 8, 2026 checkpoint results
 
-Pending. Record concrete checks and limitations here before the final commit/tag.
+Completed checkpoints 1–3. Baseline commit: `c225619`. The final checkpoint is tagged
+`v0.1.0-mvp` (a local development milestone, not a distribution release).
+
+- Debug and Release iOS simulator builds: **passed**. Only Xcode's informational
+  AppIntents metadata warning (no AppIntents dependency) remains.
+- Model checks: **passed** recurrence/DST, daily slots, multiple treatments,
+  explicit-only history, duplicate/future guards, stock, symptoms, persistence,
+  actual-site overrides, historical recording, and version-1 plan compatibility.
+- iPhone 17 Pro, iOS 26.5: existing saved profile reopened; Calendar → today's
+  dose → confirmation → Not yet retained the pending dose; confirmation removed
+  only that slot; Back to dose worked and prevented a second confirmation.
+  Selecting September 7 exposed its unrecorded evening slot, allowed a date-taken
+  confirmation, and saved it under September 7 without changing today's evening slot.
+  The saved JSON and subsequent launch verified these records and no duplicates.
+- iPhone 17e, iOS 26.5: fresh onboarding → Crohn's → Ensure Plus → oral drink →
+  twice daily → already took Morning → supply → Continue to App. Morning was
+  recorded and Evening remained pending today. The last-slot choice was required.
+  Symptom note saving, support/return, evening confirmation/return Home, and profile
+  supply editing all passed. Supply decremented once; updating it changed refill
+  indicators. Relaunch and the saved JSON verified all entries and schedule fields.
+- iPhone 17e at `accessibility-medium`: Home and injection detail/confirmation
+  remained usable with wrapping headings and scrolling content. In an isolated
+  injection fixture, changing the actual site from right abdomen to left thigh
+  changed the next suggestion to right thigh. Standard text size was restored.
+- Standard-size dose details were visually compared with ` Dose-day-top.png`;
+  typography, palette, cards, body map, and spacing preserve the reference layout
+  on the smaller phone. This was a bounded regression review, not a new pixel audit
+  of all 21 references or every accessibility text size.
+
+### Behavior and limits
+
+Daily setup stores optional `startSlot`/`lastTakenSlot` fields. Existing saved plans
+retain their prior start dates; new setup can retain later slots on the same day.
+Suggested sites follow recorded actual sites; changing a suggestion never changes
+a dose identity or a historical record. Today and historical slots use a separate
+confirmation; future slots remain read-only. Home shows the three most recent
+unrecorded doses within 90 days; Calendar exposes older selected dates. Historical
+entries record the chosen date taken and do not instruct users to take catch-up doses.
+
+Several existing body labels use fixed font sizes; comprehensive Dynamic Type and
+VoiceOver support remain outside this pass. Testing used simulators, not a physical
+iPhone. Debug review fixtures use memory only; both simulators were restored to
+normal persistent launches, and the smaller simulator was shut down afterward.

@@ -112,6 +112,16 @@ struct HomeView: View {
                         }.buttonStyle(.plain)
                     }
                 }
+                if !onboarding.unrecordedPastDoses(asOf: now).isEmpty {
+                    VStack(alignment: .leading, spacing: 14) {
+                        AppSectionLabel(title: "Past unrecorded doses")
+                        Text("Already took a dose? Add it to your history. Older dates are available in Calendar.")
+                            .font(.system(size: 14)).foregroundStyle(AppStyle.muted)
+                        ForEach(Array(onboarding.unrecordedPastDoses(asOf: now).prefix(3))) { dose in
+                            NavigationLink(value: dose) { UpcomingDoseRow(dose: dose) }.buttonStyle(.plain)
+                        }
+                    }
+                }
                 VStack(alignment: .leading, spacing: 14) {
                     AppSectionLabel(title: "Quick actions")
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
@@ -225,6 +235,6 @@ struct UpcomingDoseRow: View {
     }
     private var relativeDay: String {
         let days = Calendar.current.dateComponents([.day], from: Calendar.current.startOfDay(for: Date()), to: dose.date).day ?? 0
-        return days == 0 ? "Today" : days == 1 ? "Tomorrow" : "In \(days) days"
+        return days == -1 ? "Yesterday" : days < 0 ? "\(-days) days ago" : days == 0 ? "Today" : days == 1 ? "Tomorrow" : "In \(days) days"
     }
 }

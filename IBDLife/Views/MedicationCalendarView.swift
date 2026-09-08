@@ -7,7 +7,12 @@ struct MedicationCalendarView: View {
     private var calendar: Calendar { .current }
     private var upcoming: [ScheduledDose] { onboarding.upcoming(days: 730) }
     private var visibleDoses: [ScheduledDose] {
-        if let selectedDay { return upcoming.filter { calendar.isDate($0.date, inSameDayAs: selectedDay) } }
+        if let selectedDay {
+            if selectedDay < calendar.startOfDay(for: Date()) {
+                return onboarding.doses(from: selectedDay, through: selectedDay)
+            }
+            return upcoming.filter { calendar.isDate($0.date, inSameDayAs: selectedDay) }
+        }
         return Array(upcoming.filter { $0.date >= month }.prefix(12))
     }
     private var monthDoses: [ScheduledDose] {

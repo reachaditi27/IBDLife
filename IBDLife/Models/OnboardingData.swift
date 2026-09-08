@@ -90,13 +90,22 @@ final class OnboardingData: ObservableObject {
         treatments = selection.map { plan(for: $0.id) }
     }
 
-    func configureSchedule(id: String, frequency: DosingFrequency?, date: Date?, alreadyTaken: Bool) {
+    func configureSchedule(id: String, frequency: DosingFrequency?, date: Date?, alreadyTaken: Bool,
+                           lastTakenSlot: Int? = nil) {
         var plan = plan(for: id)
         plan.frequency = frequency
         plan.lastDoseDate = alreadyTaken ? date : nil
+        plan.lastTakenSlot = alreadyTaken ? lastTakenSlot : nil
+        plan.startSlot = nil
         if let date {
-            plan.startDate = alreadyTaken
-                ? Calendar.current.date(byAdding: .day, value: frequency?.intervalDays ?? 1, to: date) : date
+            if alreadyTaken, let frequency, let lastTakenSlot,
+               let position = frequency.slots.firstIndex(of: lastTakenSlot), position + 1 < frequency.slots.count {
+                plan.startDate = date
+                plan.startSlot = frequency.slots[position + 1]
+            } else {
+                plan.startDate = alreadyTaken
+                    ? Calendar.current.date(byAdding: .day, value: frequency?.intervalDays ?? 1, to: date) : date
+            }
         } else { plan.startDate = nil }
         // Only a dose the user explicitly reported is added to history, never projected doses.
         doseRecords.removeAll { $0.id == "initial-\(id)" }
@@ -129,8 +138,18 @@ final class OnboardingData: ObservableObject {
         return upcoming
     }
 
+    /// Home surfaces recent unrecorded doses; older dates remain accessible in Calendar.
+    func unrecordedPastDoses(asOf now: Date = Date()) -> [ScheduledDose] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: now)
+        return doses(from: calendar.date(byAdding: .day, value: -90, to: today)!,
+                     through: calendar.date(byAdding: .day, value: -1, to: today)!)
+            .sorted { ($0.date, $0.slot, $0.treatmentID) > ($1.date, $1.slot, $1.treatmentID) }
+    }
+
     func recordDose(_ dose: ScheduledDose, site: InjectionSite?, at date: Date = Date()) {
         guard !doseRecords.contains(where: { $0.id == dose.id }),
+              date <= Date(),
               Calendar.current.startOfDay(for: dose.date) <= Calendar.current.startOfDay(for: date) else { return }
         doseRecords.append(DoseRecord(id: dose.id, treatmentID: dose.treatmentID,
                                      scheduledDate: dose.date, recordedDate: date, site: site, doseNumber: dose.ordinal))
