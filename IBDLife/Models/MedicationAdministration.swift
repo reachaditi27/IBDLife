@@ -1,6 +1,6 @@
 import Foundation
 
-enum AdministrationForm: String, CaseIterable, Identifiable, Hashable {
+enum AdministrationForm: String, CaseIterable, Identifiable, Hashable, Codable {
 
     case autoInjector = "Auto-injector pen"
     case prefilledSyringe = "Pre-filled syringe"

@@ -4,7 +4,10 @@ struct DiagnosisView: View {
 
     @Environment(\.dismiss) private var dismiss
 
-    @State private var selectedDiagnoses: Set<Diagnosis> = []
+    @EnvironmentObject var onboarding: OnboardingData
+    private var selectedDiagnoses: Set<Diagnosis> {
+        Set(onboarding.diagnoses.compactMap(Diagnosis.init(rawValue:)))
+    }
 
     var body: some View {
 
@@ -34,7 +37,7 @@ struct DiagnosisView: View {
 
                 // MARK: Step
 
-                Text("STEP 2 OF 6")
+                Text("STEP 2 OF 7")
                     .font(.caption.weight(.bold))
                     .tracking(1.6)
                     .foregroundColor(.ibdSecondaryText)
@@ -183,9 +186,9 @@ struct DiagnosisView: View {
     private func toggle(_ diagnosis: Diagnosis) {
 
         if selectedDiagnoses.contains(diagnosis) {
-            selectedDiagnoses.remove(diagnosis)
+            onboarding.diagnoses.removeAll { $0 == diagnosis.rawValue }
         } else {
-            selectedDiagnoses.insert(diagnosis)
+            onboarding.diagnoses.append(diagnosis.rawValue)
         }
     }
 }
@@ -194,6 +197,6 @@ struct DiagnosisView: View {
 
     NavigationStack {
 
-        DiagnosisView()
+        DiagnosisView().environmentObject(OnboardingData(fileURL: nil))
     }
 }

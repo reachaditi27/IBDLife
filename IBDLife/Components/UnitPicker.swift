@@ -1,12 +1,8 @@
-enum MeasurementUnit {
-    case imperial
-    case metric
-}
 import SwiftUI
 
 struct UnitPicker: View {
 
-    @Binding var selectedUnit: MeasurementUnit
+    @Binding var selectedUnit: UnitSystem
 
     var body: some View {
 
@@ -31,7 +27,7 @@ struct UnitPicker: View {
     @ViewBuilder
     private func unitButton(
         title: String,
-        unit: MeasurementUnit
+        unit: UnitSystem
     ) -> some View {
 
         Button {
@@ -73,7 +69,7 @@ struct UnitPicker: View {
 
 #Preview {
 
-    @Previewable @State var unit: MeasurementUnit = .imperial
+    @Previewable @State var unit: UnitSystem = .imperial
 
     UnitPicker(selectedUnit: $unit)
         .padding()

@@ -4,16 +4,6 @@ struct AboutYouView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var onboarding: OnboardingData
 
-    @State private var age = ""
-    @State private var weight = ""
-
-    @State private var feet = ""
-    @State private var inches = ""
-    @State private var centimeters = ""
-
-    @State private var selectedUnit: MeasurementUnit = .imperial
-    @State private var selectedGender: String?
-
     var body: some View {
 
         ScrollView(showsIndicators: false) {
@@ -42,7 +32,7 @@ struct AboutYouView: View {
 
                 // MARK: Progress
 
-                Text("STEP 1 OF 6")
+                Text("STEP 1 OF 7")
                     .font(.caption.weight(.bold))
                     .tracking(1.5)
                     .foregroundColor(.ibdSecondaryText)
@@ -110,7 +100,7 @@ struct AboutYouView: View {
                 LabeledTextField(
                     title: "Age",
                     placeholder: "e.g. 18",
-                    text: $age
+                    text: $onboarding.age
                 )
 
                 Spacer()
@@ -127,16 +117,16 @@ struct AboutYouView: View {
 
                         SelectionChip(
                             title: "Male",
-                            selected: selectedGender == "Male"
+                            selected: onboarding.gender == .male
                         ) {
-                            selectedGender = "Male"
+                            onboarding.gender = .male
                         }
 
                         SelectionChip(
                             title: "Female",
-                            selected: selectedGender == "Female"
+                            selected: onboarding.gender == .female
                         ) {
-                            selectedGender = "Female"
+                            onboarding.gender = .female
                         }
                     }
 
@@ -144,16 +134,16 @@ struct AboutYouView: View {
 
                         SelectionChip(
                             title: "Non-binary",
-                            selected: selectedGender == "Non-binary"
+                            selected: onboarding.gender == .nonBinary
                         ) {
-                            selectedGender = "Non-binary"
+                            onboarding.gender = .nonBinary
                         }
 
                         SelectionChip(
                             title: "Prefer not to say",
-                            selected: selectedGender == "Prefer not to say"
+                            selected: onboarding.gender == .preferNotToSay
                         ) {
-                            selectedGender = "Prefer not to say"
+                            onboarding.gender = .preferNotToSay
                         }
                     }
                 }
@@ -177,7 +167,7 @@ struct AboutYouView: View {
                 Spacer()
                     .frame(height: 10)
 
-                UnitPicker(selectedUnit: $selectedUnit)
+                UnitPicker(selectedUnit: $onboarding.unitSystem)
 
                 Spacer()
                     .frame(height: 28)
@@ -186,10 +176,10 @@ struct AboutYouView: View {
 
                 LabeledTextField(
                     title: "Weight",
-                    placeholder: selectedUnit == .imperial
+                    placeholder: onboarding.unitSystem == .imperial
                         ? "e.g. 160"
                         : "e.g. 72",
-                    text: $weight
+                    text: $onboarding.weight
                 )
 
                 Spacer()
@@ -203,20 +193,20 @@ struct AboutYouView: View {
                 Spacer()
                     .frame(height: 10)
 
-                if selectedUnit == .imperial {
+                if onboarding.unitSystem == .imperial {
 
                     HStack(spacing: 12) {
 
                         UnitTextField(
                             placeholder: "5",
                             unit: "ft",
-                            text: $feet
+                            text: $onboarding.heightFeet
                         )
 
                         UnitTextField(
                             placeholder: "11",
                             unit: "in",
-                            text: $inches
+                            text: $onboarding.heightInches
                         )
                     }
 
@@ -225,7 +215,7 @@ struct AboutYouView: View {
                     UnitTextField(
                         placeholder: "170",
                         unit: "cm",
-                        text: $centimeters
+                        text: $onboarding.heightCentimeters
                     )
                 }
 

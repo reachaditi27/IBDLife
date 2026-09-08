@@ -3,6 +3,7 @@ import SwiftUI
 struct MedicationsView: View {
 
     let selectedDiagnoses: Set<Diagnosis>
+    @EnvironmentObject var onboarding: OnboardingData
 
     @Environment(\.dismiss) private var dismiss
 
@@ -114,6 +115,14 @@ struct MedicationsView: View {
                     )
                     .lineSpacing(3)
 
+                    if filteredMedications.isEmpty {
+                        Text("No treatments in our current list match your diagnosis. You can continue without a medication schedule.")
+                            .foregroundStyle(Color.ibdSecondaryText)
+                        NavigationLink("Continue without treatments") {
+                            Step7PlaceholderView()
+                        }.simultaneousGesture(TapGesture().onEnded { onboarding.selectMedications([]) })
+                    }
+
                     // MARK: Categories
 
                     ForEach(
@@ -214,9 +223,10 @@ struct MedicationsView: View {
                         title: "Continue"
                     )
                 }
-                .disabled(
-                    selectedMedications.isEmpty
-                )
+                .simultaneousGesture(TapGesture().onEnded {
+                    onboarding.selectMedications(selectedMedications.sorted { ($0.category.rawValue, $0.displayOrder) < ($1.category.rawValue, $1.displayOrder) })
+                })
+                .disabled(selectedMedications.isEmpty)
                 .opacity(
                     selectedMedications.isEmpty
                     ? 0.45
@@ -243,6 +253,9 @@ struct MedicationsView: View {
             Color.ibdCream
                 .ignoresSafeArea()
         )
+        .onAppear {
+            selectedMedications = Set(filteredMedications.filter { onboarding.medications.contains($0.id) })
+        }
         .navigationBarBackButtonHidden(
             true
         )

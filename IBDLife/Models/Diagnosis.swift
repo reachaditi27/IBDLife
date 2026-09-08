@@ -1,6 +1,6 @@
 import Foundation
 
-enum Diagnosis: String, CaseIterable, Hashable {
+enum Diagnosis: String, CaseIterable, Hashable, Codable {
     case crohns
     case ulcerativeColitis
     case microscopicColitis

@@ -1,6 +1,10 @@
 import SwiftUI
 
 struct InjectionSiteView: View {
+    var treatmentID: String? = nil
+    var onContinue: (() -> Void)? = nil
+    var onBack: (() -> Void)? = nil
+    @EnvironmentObject var onboarding: OnboardingData
 
     @Environment(\.dismiss) private var dismiss
 
@@ -18,7 +22,7 @@ struct InjectionSiteView: View {
                     // MARK: Back
 
                     Button {
-                        dismiss()
+                        if let onBack { onBack() } else { dismiss() }
                     } label: {
 
                         HStack(spacing: 6) {
@@ -182,10 +186,13 @@ struct InjectionSiteView: View {
 
                 Spacer()
 
-                NavigationLink {
-
-                    Step6PlaceholderView()
-
+                Button {
+                    if let treatmentID {
+                        var plan = onboarding.plan(for: treatmentID)
+                        plan.sites = InjectionSite.allCases.filter { selectedSites.contains($0) }
+                        onboarding.updatePlan(plan)
+                    }
+                    onContinue?()
                 } label: {
 
                     HStack(spacing: 8) {
@@ -228,6 +235,9 @@ struct InjectionSiteView: View {
             Color.ibdCream
                 .ignoresSafeArea()
         )
+        .onAppear {
+            if let treatmentID { selectedSites = Set(onboarding.plan(for: treatmentID).sites) }
+        }
         .navigationBarBackButtonHidden(true)
     }
 
@@ -245,73 +255,6 @@ struct InjectionSiteView: View {
 
 
 // MARK: - Injection Site
-
-enum InjectionSite:
-    String,
-    CaseIterable,
-    Identifiable,
-    Hashable {
-
-    case leftAbdomen
-    case rightAbdomen
-    case leftThigh
-    case rightThigh
-    case leftUpperArm
-    case rightUpperArm
-
-    var id: String {
-        rawValue
-    }
-
-    var title: String {
-
-        switch self {
-
-        case .leftAbdomen:
-            return "Left abdomen"
-
-        case .rightAbdomen:
-            return "Right abdomen"
-
-        case .leftThigh:
-            return "Left thigh"
-
-        case .rightThigh:
-            return "Right thigh"
-
-        case .leftUpperArm:
-            return "Left upper arm"
-
-        case .rightUpperArm:
-            return "Right upper arm"
-        }
-    }
-
-    var subtitle: String {
-
-        switch self {
-
-        case .leftAbdomen:
-            return "2 inches to the left of your belly button"
-
-        case .rightAbdomen:
-            return "2 inches to the right of your belly button"
-
-        case .leftThigh:
-            return "Middle of your left outer thigh"
-
-        case .rightThigh:
-            return "Middle of your right outer thigh"
-
-        case .leftUpperArm:
-            return "Back of your left upper arm"
-
-        case .rightUpperArm:
-            return "Back of your right upper arm"
-        }
-    }
-}
-
 
 // MARK: - Site Card
 
@@ -505,6 +448,8 @@ struct InjectionBodyMap: View {
                 )
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(site.title)
+        .accessibilityValue(selectedSites.contains(site) ? "Selected" : "Not selected")
         .offset(x: x, y: y)
     }
 }

@@ -5,6 +5,7 @@ struct MedicationAdministrationView: View {
     // MARK: - Input
 
     let medications: [Medication]
+    @EnvironmentObject var onboarding: OnboardingData
 
     // MARK: - Environment
 
@@ -15,7 +16,7 @@ struct MedicationAdministrationView: View {
     @State private var currentIndex = 0
 
     @State private var selectedForms:
-        [UUID: Set<AdministrationForm>] = [:]
+        [String: Set<AdministrationForm>] = [:]
 
     // MARK: - Navigation
 
@@ -31,9 +32,8 @@ struct MedicationAdministrationView: View {
 
     private var availableForms: [AdministrationForm] {
 
-        MedicationAdministrationDatabase.forms(
-            for: currentMedication.brandName
-        )
+        let known = MedicationAdministrationDatabase.forms(for: currentMedication.brandName)
+        return known.isEmpty ? AdministrationForm.allCases : known
     }
 
     // MARK: - Current Selection
@@ -71,7 +71,7 @@ struct MedicationAdministrationView: View {
 
                     Button {
 
-                        dismiss()
+                        if currentIndex > 0 { currentIndex -= 1 } else { dismiss() }
 
                     } label: {
 
@@ -197,6 +197,10 @@ struct MedicationAdministrationView: View {
                     Spacer()
                         .frame(height: 28)
 
+                    if MedicationAdministrationDatabase.forms(for: currentMedication.brandName).isEmpty {
+                        Text("Choose the form listed on your prescription. This treatment doesn't yet have a form-specific entry in our catalog.")
+                            .font(.subheadline).foregroundStyle(Color.ibdSecondaryText).padding(.bottom, 16)
+                    }
                     // MARK: Administration Forms
 
                     if availableForms.isEmpty {
@@ -242,6 +246,11 @@ struct MedicationAdministrationView: View {
             Color.ibdCream
                 .ignoresSafeArea()
         )
+        .onAppear {
+            for medication in medications {
+                selectedForms[medication.id] = onboarding.plan(for: medication.id).forms
+            }
+        }
         .navigationBarBackButtonHidden(true)
 
         // -------------------------------------------------
@@ -257,10 +266,7 @@ struct MedicationAdministrationView: View {
                 $goToDosingSchedule
         ) {
 
-            DosingScheduleView(
-                medication:
-                    currentMedication
-            )
+            TreatmentSetupFlow(medications: medications)
         }
     }
 
@@ -355,9 +361,10 @@ struct MedicationAdministrationView: View {
             forms.insert(form)
         }
 
-        selectedForms[
-            currentMedication.id
-        ] = forms
+        selectedForms[currentMedication.id] = forms
+        var plan = onboarding.plan(for: currentMedication.id)
+        plan.forms = forms
+        onboarding.updatePlan(plan)
     }
 
     // MARK: - Continue

@@ -2,7 +2,7 @@ import Foundation
 
 struct Medication: Identifiable, Hashable {
 
-    let id = UUID()
+    var id: String { brandName.lowercased() }
 
     let brandName: String
     let genericName: String?
