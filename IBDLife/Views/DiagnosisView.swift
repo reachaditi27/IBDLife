@@ -5,6 +5,7 @@ struct DiagnosisView: View {
     @Environment(\.dismiss) private var dismiss
 
     @EnvironmentObject var onboarding: OnboardingData
+    @State private var showAdditionalConditions = false
     private var selectedDiagnoses: Set<Diagnosis> {
         Set(onboarding.diagnoses.compactMap(Diagnosis.init(rawValue:)))
     }
@@ -52,7 +53,7 @@ struct DiagnosisView: View {
                     Text("Which IBD")
                         .font(.system(size: 38, weight: .bold, design: .serif))
 
-                    Text("condition(s)")
+                    Text("condition")
                         .font(.system(size: 38, weight: .bold, design: .serif))
 
                     Text("have you been")
@@ -67,7 +68,7 @@ struct DiagnosisView: View {
                 Spacer()
                     .frame(height: 18)
 
-                Text("Select all that apply. Your selection helps us personalize medication reminders and symptom logging, and support you with medication management.")
+                Text("Choose your primary diagnosis. Your selection helps us personalize medication reminders, symptom logging, and medication management.")
                     .font(.system(size: 16))
                     .foregroundColor(.ibdSecondaryText)
                     .lineSpacing(4)
@@ -85,9 +86,9 @@ struct DiagnosisView: View {
                         "LARGE INTESTINE",
                         "MOUTH TO ANUS"
                     ],
-                    selected: selectedDiagnoses.contains(.crohns)
+                    selected: onboarding.primaryDiagnosis == .crohns
                 ) {
-                    toggle(.crohns)
+                    selectPrimary(.crohns)
                 }
 
                 Spacer()
@@ -102,9 +103,9 @@ struct DiagnosisView: View {
                         "COLON",
                         "RECTUM"
                     ],
-                    selected: selectedDiagnoses.contains(.ulcerativeColitis)
+                    selected: onboarding.primaryDiagnosis == .ulcerativeColitis
                 ) {
-                    toggle(.ulcerativeColitis)
+                    selectPrimary(.ulcerativeColitis)
                 }
 
                 Spacer()
@@ -118,9 +119,9 @@ struct DiagnosisView: View {
                     tags: [
                         "COLON"
                     ],
-                    selected: selectedDiagnoses.contains(.microscopicColitis)
+                    selected: onboarding.primaryDiagnosis == .microscopicColitis
                 ) {
-                    toggle(.microscopicColitis)
+                    selectPrimary(.microscopicColitis)
                 }
 
                 Spacer()
@@ -135,13 +136,44 @@ struct DiagnosisView: View {
                         "COLON",
                         "TERMINAL ILEUM"
                     ],
-                    selected: selectedDiagnoses.contains(.ibdUnclassified)
+                    selected: onboarding.primaryDiagnosis == .ibdUnclassified
                 ) {
-                    toggle(.ibdUnclassified)
+                    selectPrimary(.ibdUnclassified)
                 }
 
                 Spacer()
                     .frame(height: 20)
+
+                if onboarding.primaryDiagnosis != nil {
+                    if showAdditionalConditions {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("ADDITIONAL CONDITIONS")
+                                .font(.caption.weight(.bold)).tracking(1.2)
+                                .foregroundColor(.ibdSecondaryText)
+                            ForEach(Diagnosis.allCases.filter { $0 != onboarding.primaryDiagnosis }, id: \.self) { diagnosis in
+                                additionalConditionRow(diagnosis)
+                            }
+                            Button("Use one condition only") {
+                                onboarding.removeAdditionalDiagnoses()
+                                showAdditionalConditions = false
+                            }
+                            .font(.system(size: 14)).foregroundColor(.ibdSecondaryText).underline()
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                        }
+                    } else {
+                        Button {
+                            showAdditionalConditions = true
+                        } label: {
+                            Label("Add another condition", systemImage: "plus.circle")
+                                .font(.system(size: 14, weight: .medium)).foregroundColor(.ibdGreen)
+                                .frame(maxWidth: .infinity, minHeight: 48)
+                                .background(.white, in: RoundedRectangle(cornerRadius: 14))
+                                .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.ibdBorder))
+                        }.buttonStyle(.plain)
+                    }
+
+                    Spacer().frame(height: 20)
+                }
 
                 // MARK: Info
 
@@ -180,16 +212,30 @@ struct DiagnosisView: View {
             .padding(.bottom, 32)
         }
         .background(Color.ibdCream.ignoresSafeArea())
+        .onAppear { showAdditionalConditions = onboarding.diagnoses.count > 1 }
         .navigationBarBackButtonHidden(true)
     }
 
-    private func toggle(_ diagnosis: Diagnosis) {
+    private func selectPrimary(_ diagnosis: Diagnosis) {
+        onboarding.setPrimaryDiagnosis(diagnosis, preservingAdditional: showAdditionalConditions)
+    }
 
-        if selectedDiagnoses.contains(diagnosis) {
-            onboarding.diagnoses.removeAll { $0 == diagnosis.rawValue }
-        } else {
-            onboarding.diagnoses.append(diagnosis.rawValue)
+    private func additionalConditionRow(_ diagnosis: Diagnosis) -> some View {
+        let selected = onboarding.additionalDiagnoses.contains(diagnosis)
+        return Button {
+            onboarding.setAdditionalDiagnosis(diagnosis, selected: !selected)
+        } label: {
+            HStack {
+                Image(systemName: selected ? "checkmark.square.fill" : "square")
+                    .font(.system(size: 20)).foregroundColor(selected ? .ibdGreen : .ibdSecondaryText)
+                Text(diagnosis.displayName).font(.system(size: 15, weight: .medium)).foregroundColor(.primary)
+                Spacer()
+            }
+            .padding(16).background(.white, in: RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(Color.ibdBorder))
         }
+        .buttonStyle(.plain)
+        .accessibilityValue(selected ? "Selected" : "Not selected")
     }
 }
 

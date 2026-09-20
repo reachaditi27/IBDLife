@@ -27,6 +27,7 @@ enum MedicationReminderPlanner {
 
         for plan in treatments {
             let medicationName = plan.medication?.brandName ?? plan.id
+            let doseNoun = plan.isNutrition ? "serving" : "dose"
             let doses = DoseSchedule.doses(for: plan, from: today, through: end,
                                             records: records, calendar: calendar)
                 .filter { !recordedIDs.contains($0.id) }
@@ -37,8 +38,8 @@ enum MedicationReminderPlanner {
                     id: "ibdlife.dose.\(dose.id)",
                     kind: .dose,
                     date: fireDate,
-                    title: "Medication reminder",
-                    body: "Your \(dose.timeLabel.lowercased()) dose of \(medicationName) is scheduled now."
+                    title: plan.isNutrition ? "Nutrition reminder" : "Medication reminder",
+                    body: "Your \(dose.timeLabel.lowercased()) \(doseNoun) of \(medicationName) is scheduled now."
                 ))
             }
 
@@ -63,8 +64,10 @@ enum MedicationReminderPlanner {
                     id: "ibdlife.refill.\(dose.id)",
                     kind: .refill,
                     date: fireDate,
-                    title: "Refill reminder",
-                    body: "Your \(medicationName) supply is projected to run out soon. Contact your pharmacy or specialty mail service."
+                    title: plan.isNutrition ? "Nutrition supply reminder" : "Refill reminder",
+                    body: plan.isNutrition
+                        ? "Your \(medicationName) supply is projected to run out soon. Plan your next order."
+                        : "Your \(medicationName) supply is projected to run out soon. Contact your pharmacy or specialty mail service."
                 ))
             }
         }

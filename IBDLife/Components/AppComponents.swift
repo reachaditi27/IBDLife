@@ -135,8 +135,8 @@ struct MedicationReminderToggle: View {
             set: updatePreference
         )) {
             VStack(alignment: .leading, spacing: 5) {
-                Text("Medication reminders").font(.system(size: 15, weight: .medium))
-                Text("Dose times and refill reminders")
+                Text("Treatment reminders").font(.system(size: 15, weight: .medium))
+                Text("Medication, nutrition, and supply reminders")
                     .font(.system(size: 12)).foregroundStyle(AppStyle.muted)
             }
         }
@@ -145,7 +145,7 @@ struct MedicationReminderToggle: View {
         .alert("Notifications are off", isPresented: $showPermissionMessage) {
             Button("OK", role: .cancel) { }
         } message: {
-            Text("Allow notifications for IBDLife in Settings to turn on medication reminders.")
+            Text("Allow notifications for IBDLife in Settings to turn on treatment reminders.")
         }
     }
 

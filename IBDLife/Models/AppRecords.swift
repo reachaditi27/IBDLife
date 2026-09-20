@@ -15,6 +15,7 @@ struct TreatmentPlan: Identifiable, Codable, Hashable {
 
     var medication: Medication? { MedicationDatabase.medications.first { $0.id == id } }
     var isInjection: Bool { !forms.isDisjoint(with: [.autoInjector, .prefilledSyringe]) }
+    var isNutrition: Bool { medication?.isNutrition == true }
     var orderedForms: [AdministrationForm] { AdministrationForm.allCases.filter { forms.contains($0) } }
 }
 

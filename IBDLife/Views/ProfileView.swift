@@ -2,6 +2,8 @@ import SwiftUI
 
 struct ProfileView: View {
     @EnvironmentObject var onboarding: OnboardingData
+    private var medicationPlans: [TreatmentPlan] { onboarding.treatments.filter { !$0.isNutrition } }
+    private var nutritionPlans: [TreatmentPlan] { onboarding.treatments.filter(\.isNutrition) }
     var body: some View {
         AppPage(title: "My Profile") {
             VStack(alignment: .leading, spacing: 12) {
@@ -43,24 +45,13 @@ struct ProfileView: View {
                 AppSectionLabel(title: "Reminders")
                 AppCard(padding: 15) { MedicationReminderToggle() }
             }
-            VStack(alignment: .leading, spacing: 12) {
-                sectionHeader("Medications") { ProfileMedicationsEditor() }
-                if onboarding.treatments.isEmpty {
-                    EmptyMessage(title: "No medications added", detail: "You can still use symptom check-ins and support.")
-                } else {
-                    ForEach(onboarding.treatments) { plan in
-                        AppCard(padding: 15) {
-                            Text("\(plan.medication?.brandName ?? plan.id)\(Text(plan.medication?.genericName.map { " (\($0))" } ?? "").foregroundColor(AppStyle.muted))")
-                                .font(.system(size: 14))
-                        }
-                    }
-                }
-            }
+            treatmentSummary(kind: .medication, plans: medicationPlans)
+            treatmentSummary(kind: .nutrition, plans: nutritionPlans)
             ForEach(onboarding.treatments) { plan in
                 VStack(alignment: .leading, spacing: 22) {
                     Text(plan.medication?.brandName ?? plan.id)
                         .font(AppStyle.serif(24)).padding(.top, 4)
-                    editableSection("Prescription form") {
+                    editableSection(plan.isNutrition ? "Nutrition form" : "Prescription form") {
                         ProfilePrescriptionFormEditor(treatmentID: plan.id)
                     } content: {
                         VStack(alignment: .leading, spacing: 10) {
@@ -74,7 +65,8 @@ struct ProfileView: View {
                         }
                     }
                     VStack(alignment: .leading, spacing: 10) {
-                        sectionHeader("Dosing schedule", actionTitle: plan.frequency == nil ? "Set up" : "Edit") {
+                        sectionHeader(plan.isNutrition ? "Nutrition schedule" : "Dosing schedule",
+                                      actionTitle: plan.frequency == nil ? "Set up" : "Edit") {
                             ProfileScheduleEditor(treatmentID: plan.id)
                         }
                         AppCard(padding: 15) {
@@ -88,18 +80,42 @@ struct ProfileView: View {
                         }
                     }
                     VStack(alignment: .leading, spacing: 10) {
-                        sectionHeader("Doses per order") {
+                        sectionHeader(plan.isNutrition ? "Servings per order" : "Doses per order") {
                             DosesPerOrderEditorView(treatmentID: plan.id)
                         }
                         AppCard(padding: 15) {
                             VStack(alignment: .leading, spacing: 5) {
-                                Text(plan.dosesPerOrder.map { "\($0) doses per prescription" } ?? "Not set up")
+                                Text(plan.dosesPerOrder.map {
+                                    plan.isNutrition ? "\($0) servings per order" : "\($0) doses per prescription"
+                                } ?? "Not set up")
                                     .font(.system(size: 14))
                                 if let remaining = plan.dosesRemaining {
-                                    Text("\(remaining) doses remaining").font(.system(size: 12)).foregroundStyle(AppStyle.muted)
+                                    Text("\(remaining) \(plan.isNutrition ? "servings" : "doses") remaining")
+                                        .font(.system(size: 12)).foregroundStyle(AppStyle.muted)
                                 }
                             }
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    private func treatmentSummary(kind: ProfileTreatmentKind, plans: [TreatmentPlan]) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionHeader(kind.isNutrition ? "Nutrition" : "Medications") {
+                ProfileTreatmentsEditor(kind: kind)
+            }
+            if plans.isEmpty {
+                EmptyMessage(title: kind.isNutrition ? "No nutrition added" : "No medications added",
+                             detail: kind.isNutrition
+                                ? "Add any nutrition products you currently use."
+                                : "You can still use symptom check-ins and support.")
+            } else {
+                ForEach(plans) { plan in
+                    AppCard(padding: 15) {
+                        Text("\(plan.medication?.brandName ?? plan.id)\(Text(plan.medication?.genericName.map { " (\($0))" } ?? "").foregroundColor(AppStyle.muted))")
+                            .font(.system(size: 14))
                     }
                 }
             }
@@ -148,27 +164,36 @@ struct DosesPerOrderEditorView: View {
         guard let quantity = Int(order), let stock = Int(remaining) else { return false }
         return quantity > 0 && quantity <= 9999 && stock >= 0 && stock <= 9999
     }
+    private var isNutrition: Bool { onboarding.plan(for: treatmentID).isNutrition }
 
     var body: some View {
         AppPage(back: false, topInset: 36) {
             AppBackButton(action: onBack)
             VStack(alignment: .leading, spacing: 0) {
-                Text("How many doses\ncome").font(AppStyle.serif(34))
-                Text("with each\nprescription?").font(AppStyle.italic(34))
+                Text(isNutrition ? "How many servings\ncome" : "How many doses\ncome").font(AppStyle.serif(34))
+                Text(isNutrition ? "with each\norder?" : "with each\nprescription?").font(AppStyle.italic(34))
             }
-            Text("We'll use this to remind you when it's time to request a refill — before you run out.")
+            Text(isNutrition
+                 ? "We'll use this to remind you when it's time to order more — before you run out."
+                 : "We'll use this to remind you when it's time to request a refill — before you run out.")
                 .font(.system(size: 15)).foregroundStyle(AppStyle.muted).lineSpacing(5)
             if onboarding.treatments.count > 1 {
                 Text(onboarding.plan(for: treatmentID).medication?.brandName ?? treatmentID)
                     .font(.headline).foregroundStyle(AppStyle.green)
             }
             VStack(alignment: .leading, spacing: 20) {
-                doseField("Number of doses per order", placeholder: "e.g. 2", text: $order)
-                doseField("Doses remaining in your current prescription", placeholder: "e.g. 1", text: $remaining)
-                Text("For example: 2 doses per shipment, with 1 dose currently remaining.")
+                doseField(isNutrition ? "Number of servings per order" : "Number of doses per order",
+                          placeholder: "e.g. 2", unit: isNutrition ? "servings" : "doses", text: $order)
+                doseField(isNutrition ? "Servings remaining" : "Doses remaining in your current prescription",
+                          placeholder: "e.g. 1", unit: isNutrition ? "servings" : "doses", text: $remaining)
+                Text(isNutrition
+                     ? "For example: 12 servings per order, with 4 servings currently remaining."
+                     : "For example: 2 doses per shipment, with 1 dose currently remaining.")
                     .font(.system(size: 12)).foregroundStyle(AppStyle.muted).lineSpacing(4)
             }
-            Text("Refill reminders will appear on your calendar one week before you're scheduled to run out, giving you time to contact your pharmacy or specialty mail service.")
+            Text(isNutrition
+                 ? "Supply reminders will appear one week before you're scheduled to run out, giving you time to arrange your next order."
+                 : "Refill reminders will appear on your calendar one week before you're scheduled to run out, giving you time to contact your pharmacy or specialty mail service.")
                 .font(.system(size: 14)).lineSpacing(5).foregroundStyle(AppStyle.green)
                 .padding(18).frame(maxWidth: .infinity, alignment: .leading)
                 .background(AppStyle.paleGreen, in: RoundedRectangle(cornerRadius: 16))
@@ -193,12 +218,12 @@ struct DosesPerOrderEditorView: View {
     }
 
     private func finish() { if let onComplete { onComplete() } else { dismiss() } }
-    private func doseField(_ title: String, placeholder: String, text: Binding<String>) -> some View {
+    private func doseField(_ title: String, placeholder: String, unit: String, text: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title).font(.system(size: 14, weight: .medium))
             HStack {
                 TextField(placeholder, text: text).keyboardType(.numberPad).accessibilityLabel(title)
-                Text("doses").foregroundStyle(AppStyle.muted)
+                Text(unit).foregroundStyle(AppStyle.muted)
             }.font(.system(size: 15)).padding(16)
                 .background(.white, in: RoundedRectangle(cornerRadius: 14))
                 .overlay(RoundedRectangle(cornerRadius: 14).stroke(AppStyle.border))

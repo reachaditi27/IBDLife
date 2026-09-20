@@ -31,6 +31,29 @@ struct ModelChecks {
         precondition(dst.map { calendar.component(.day, from: $0.date) } == [1, 8, 15], "Weekly dates cross DST without drifting")
         precondition(dst.allSatisfy { calendar.component(.hour, from: $0.date) == 0 })
 
+        let conditionStore = OnboardingData(fileURL: nil)
+        conditionStore.setPrimaryDiagnosis(.crohns)
+        conditionStore.setAdditionalDiagnosis(.microscopicColitis, selected: true)
+        precondition(conditionStore.primaryDiagnosis == .crohns &&
+                     conditionStore.additionalDiagnoses == [.microscopicColitis],
+                     "Primary and uncommon additional diagnoses remain distinct")
+        conditionStore.setPrimaryDiagnosis(.ulcerativeColitis, preservingAdditional: true)
+        precondition(conditionStore.primaryDiagnosis == .ulcerativeColitis &&
+                     Set(conditionStore.additionalDiagnoses) == [.crohns, .microscopicColitis])
+        conditionStore.removeAdditionalDiagnoses()
+        precondition(conditionStore.diagnoses == [Diagnosis.ulcerativeColitis.rawValue],
+                     "Returning to single-condition mode removes only additional diagnoses")
+        precondition(MedicationDatabase.selectedAlternativeGroups(in: ["humira", "amjevita"]).count == 1)
+        precondition(MedicationDatabase.selectedAlternativeGroups(in: ["humira", "stelara"]).isEmpty,
+                     "Only likely originator/biosimilar alternatives trigger a selection notice")
+        precondition(MedicationDatabase.medications.first { $0.id == "ensure plus" }?.isNutrition == true)
+        precondition(MedicationDatabase.medications.first { $0.id == "humira" }?.isNutrition == false,
+                     "Nutrition products remain distinguishable from medication")
+        for previous in SupportAffirmations.sets.indices {
+            precondition(SupportAffirmations.nextIndex(after: previous) != previous,
+                         "A support visit does not immediately repeat its affirmation set")
+        }
+
         let reminderNow = calendar.date(from: DateComponents(year: 2026, month: 9, day: 7, hour: 8))!
         plan.frequency = .everyTwoWeeks; plan.startDate = september
         plan.dosesPerOrder = 2; plan.dosesRemaining = 2
@@ -42,6 +65,13 @@ struct ModelChecks {
                      "Morning slot schedules at 9 AM local time")
         precondition(refillReminders.first?.date == calendar.date(from: DateComponents(year: 2026, month: 9, day: 14, hour: 9)),
                      "Refill reminder is one week before the projected last dose")
+        let nutritionPlan = TreatmentPlan(id: "ensure plus", forms: [.oralNutritionDrink], frequency: .onceDaily,
+                                          startDate: september)
+        let nutritionReminder = MedicationReminderPlanner.reminders(treatments: [nutritionPlan], records: [],
+                                                                     now: reminderNow, calendar: calendar).first
+        precondition(nutritionReminder?.title == "Nutrition reminder" &&
+                     nutritionReminder?.body.contains("serving") == true,
+                     "Nutrition notifications are not labeled as medication")
         precondition(Set(reminders.map(\.id)).count == reminders.count, "Reminder identifiers are stable and unique")
         let recordedFirst = DoseRecord(id: "humira-\(Int(september.timeIntervalSince1970))-0", treatmentID: "humira",
                                        scheduledDate: september, recordedDate: september, site: nil, doseNumber: 1)
@@ -157,6 +187,6 @@ struct ModelChecks {
         precondition(partial.unrecordedPastDoses().count == 1)
         precondition(partial.doseRecords.last?.recordedDate == yesterday, "Historical entry keeps actual date taken")
         precondition(partial.doses(from: today, through: today).count == 2, "Historical entry leaves today's slots intact")
-        print("PASS: recurrence, DST, reminders/refills, BMI/history, per-day slots, site rotation, multiple treatments, explicit history, duplicate/future guards, refill counts, symptoms, and persistence")
+        print("PASS: recurrence, DST, condition/medication/nutrition selection, rotating support, reminders/refills, BMI/history, per-day slots, site rotation, multiple treatments, explicit history, duplicate/future guards, refill counts, symptoms, and persistence")
     }
 }

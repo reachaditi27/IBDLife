@@ -47,6 +47,10 @@ struct MedicationsView: View {
         }
     }
 
+    private var selectedAlternativeGroups: [[Medication]] {
+        MedicationDatabase.selectedAlternativeGroups(in: Set(selectedMedications.map(\.id)))
+    }
+
     var body: some View {
 
         VStack(spacing: 0) {
@@ -115,8 +119,12 @@ struct MedicationsView: View {
                     )
                     .lineSpacing(3)
 
+                    ForEach(Array(selectedAlternativeGroups.enumerated()), id: \.offset) { _, medications in
+                        MedicationAlternativeNotice(medications: medications)
+                    }
+
                     if filteredMedications.isEmpty {
-                        Text("No treatments in our current list match your diagnosis. You can continue without a medication schedule.")
+                        Text("No treatments in our current list match your diagnosis. You can continue without a treatment schedule.")
                             .foregroundStyle(Color.ibdSecondaryText)
                         NavigationLink("Continue without treatments") {
                             Step7PlaceholderView()

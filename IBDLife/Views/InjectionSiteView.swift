@@ -102,6 +102,27 @@ struct InjectionSiteView: View {
 
                     // MARK: Body
 
+                    VStack(spacing: 3) {
+                        Text("FRONT VIEW")
+                            .font(.caption2.weight(.bold))
+                            .tracking(1.3)
+                        Text("Your right appears on the left side of the screen")
+                            .font(.caption)
+                    }
+                    .foregroundColor(.ibdSecondaryText)
+                    .frame(maxWidth: .infinity)
+
+                    HStack {
+                        Text("YOUR RIGHT")
+                        Spacer()
+                        Text("YOUR LEFT")
+                    }
+                    .font(.caption2.weight(.bold))
+                    .tracking(0.8)
+                    .foregroundColor(.ibdSecondaryText)
+                    .padding(.horizontal, 28)
+                    .padding(.top, 12)
+
                     InjectionBodyMap(
                         selectedSites: $selectedSites
                     )
@@ -403,14 +424,14 @@ struct InjectionBodyMap: View {
                 .offset(x: 20, y: 82)
 
             // Dots
-            siteDot(.leftUpperArm, x: -58, y: -20)
-            siteDot(.rightUpperArm, x: 58, y: -20)
+            siteDot(.rightUpperArm, x: -58, y: -20)
+            siteDot(.leftUpperArm, x: 58, y: -20)
 
-            siteDot(.leftAbdomen, x: -20, y: -10)
-            siteDot(.rightAbdomen, x: 20, y: -10)
+            siteDot(.rightAbdomen, x: -20, y: -10)
+            siteDot(.leftAbdomen, x: 20, y: -10)
 
-            siteDot(.leftThigh, x: -20, y: 50)
-            siteDot(.rightThigh, x: 20, y: 50)
+            siteDot(.rightThigh, x: -20, y: 50)
+            siteDot(.leftThigh, x: 20, y: 50)
         }
     }
 

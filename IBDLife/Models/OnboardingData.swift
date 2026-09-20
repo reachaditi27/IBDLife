@@ -91,6 +91,33 @@ final class OnboardingData: ObservableObject {
         treatments.first { $0.id == id } ?? TreatmentPlan(id: id)
     }
 
+    var primaryDiagnosis: Diagnosis? {
+        diagnoses.compactMap(Diagnosis.init(rawValue:)).first
+    }
+
+    var additionalDiagnoses: [Diagnosis] {
+        Array(diagnoses.compactMap(Diagnosis.init(rawValue:)).dropFirst())
+    }
+
+    func setPrimaryDiagnosis(_ diagnosis: Diagnosis, preservingAdditional: Bool = false) {
+        let additional = preservingAdditional
+            ? diagnoses.compactMap(Diagnosis.init(rawValue:)).filter { $0 != diagnosis }
+            : []
+        diagnoses = [diagnosis.rawValue] + additional.map(\.rawValue)
+    }
+
+    func setAdditionalDiagnosis(_ diagnosis: Diagnosis, selected: Bool) {
+        guard diagnosis != primaryDiagnosis else { return }
+        var additional = additionalDiagnoses.filter { $0 != diagnosis }
+        if selected { additional.append(diagnosis) }
+        diagnoses = primaryDiagnosis.map { [$0.rawValue] } ?? []
+        diagnoses += Diagnosis.allCases.filter(additional.contains).map(\.rawValue)
+    }
+
+    func removeAdditionalDiagnoses() {
+        diagnoses = primaryDiagnosis.map { [$0.rawValue] } ?? []
+    }
+
     func updatePlan(_ plan: TreatmentPlan) {
         if let index = treatments.firstIndex(where: { $0.id == plan.id }) {
             treatments[index] = plan

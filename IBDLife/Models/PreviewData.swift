@@ -25,7 +25,8 @@ extension OnboardingData {
                                     at: offset(-30))
         store.updateBodyMeasurement(unitSystem: .imperial, weight: "160", heightFeet: "5", heightInches: "10",
                                     at: today)
-        store.selectMedications(MedicationDatabase.medications.filter { $0.id == "humira" })
+        let treatmentIDs: Set<String> = scenario == "nutrition" ? ["humira", "ensure plus"] : ["humira"]
+        store.selectMedications(MedicationDatabase.medications.filter { treatmentIDs.contains($0.id) })
         var plan = store.plan(for: "humira")
         plan.forms = [.autoInjector]
         plan.sites = scenario == "no-dose" ? [.leftThigh] : InjectionSite.allCases
@@ -33,6 +34,13 @@ extension OnboardingData {
         store.updatePlan(plan)
         store.configureSchedule(id: "humira", frequency: scenario == "no-dose" ? .everyTwoWeeks : .onceDaily,
                                 date: scenario == "no-dose" ? offset(-9) : offset(-1), alreadyTaken: true)
+        if scenario == "nutrition" {
+            var nutrition = store.plan(for: "ensure plus")
+            nutrition.forms = [.oralNutritionDrink]
+            nutrition.dosesPerOrder = 12; nutrition.dosesRemaining = 4
+            store.updatePlan(nutrition)
+            store.configureSchedule(id: "ensure plus", frequency: .onceDaily, date: today, alreadyTaken: false)
+        }
         if scenario == "no-dose" {
             store.doseRecords = (0..<6).map { index in
                 DoseRecord(id: "review-history-\(index)", treatmentID: "humira", scheduledDate: offset(-9 - index * 14),

@@ -2,6 +2,19 @@ import Foundation
 
 struct MedicationDatabase {
 
+    /// Originators and biosimilars that are commonly alternatives rather than separate therapies.
+    static let alternativeGroups: [[String]] = [
+        ["humira", "amjevita", "hadlima", "hyrimoz", "cyltezo"],
+        ["remicade", "inflectra", "renflexis", "avsola"]
+    ]
+
+    static func selectedAlternativeGroups(in medicationIDs: Set<String>) -> [[Medication]] {
+        alternativeGroups.compactMap { group in
+            let matches = medications.filter { group.contains($0.id) && medicationIDs.contains($0.id) }
+            return matches.count > 1 ? matches : nil
+        }
+    }
+
     static let medications: [Medication] = [
 
         // MARK: - BIOLOGICS

@@ -38,7 +38,7 @@ private struct DoseDetailContent: View {
                 .padding(.vertical, 8)
             AppCard {
                 VStack(alignment: .leading, spacing: 12) {
-                    AppSectionLabel(title: "Your medication")
+                    AppSectionLabel(title: plan.isNutrition ? "Your nutrition" : "Your medication")
                     VStack(alignment: .leading, spacing: 6) {
                         Text(plan.medication?.brandName ?? plan.id).font(.system(size: 16, weight: .medium))
                         Text([plan.medication?.genericName, plan.medication?.category.title.capitalized].compactMap { $0 }.joined(separator: " · "))
@@ -124,7 +124,9 @@ struct DoseConfirmationView: View {
                     AppActionLabel(title: onRecorded == nil ? "Back to dose" : "Back to home")
                 }
             } else {
-                Text("Only confirm once you've taken your medication. Being ready doesn't record a dose.")
+                Text(onboarding.plan(for: dose.treatmentID).isNutrition
+                     ? "Only confirm once you've had this serving. Being ready doesn't record it."
+                     : "Only confirm once you've taken your medication. Being ready doesn't record a dose.")
                     .font(.system(size: 15)).foregroundStyle(AppStyle.muted).lineSpacing(5)
                 AppCard {
                     VStack(alignment: .leading, spacing: 12) {
@@ -182,12 +184,12 @@ struct InjectionSiteIllustration: View {
     }
     private var position: CGPoint {
         switch site {
-        case .leftAbdomen: CGPoint(x: -14, y: -4)
-        case .rightAbdomen: CGPoint(x: 14, y: -4)
-        case .leftThigh: CGPoint(x: -15, y: 42)
-        case .rightThigh: CGPoint(x: 15, y: 42)
-        case .leftUpperArm: CGPoint(x: -36, y: -20)
-        case .rightUpperArm: CGPoint(x: 36, y: -20)
+        case .leftAbdomen: CGPoint(x: 14, y: -4)
+        case .rightAbdomen: CGPoint(x: -14, y: -4)
+        case .leftThigh: CGPoint(x: 15, y: 42)
+        case .rightThigh: CGPoint(x: -15, y: 42)
+        case .leftUpperArm: CGPoint(x: 36, y: -20)
+        case .rightUpperArm: CGPoint(x: -36, y: -20)
         }
     }
 }

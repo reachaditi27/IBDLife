@@ -12,4 +12,6 @@ struct Medication: Identifiable, Hashable {
 
     /// Lower numbers appear first within each category.
     let displayOrder: Int
+
+    var isNutrition: Bool { category == .nutrition }
 }

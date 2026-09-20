@@ -10,9 +10,12 @@ struct MedicationCard: View {
         Button(action: onTap) {
             HStack(alignment: .top, spacing: 16) {
 
-                // Selection Circle
+                // Multi-select checkbox
                 ZStack {
-                    Circle()
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(isSelected ? Color.ibdGreen : Color.white)
+                        .frame(width: 24, height: 24)
+                    RoundedRectangle(cornerRadius: 5)
                         .stroke(
                             isSelected ? Color.ibdGreen : Color.ibdBorder,
                             lineWidth: 2
@@ -20,9 +23,9 @@ struct MedicationCard: View {
                         .frame(width: 24, height: 24)
 
                     if isSelected {
-                        Circle()
-                            .fill(Color.ibdGreen)
-                            .frame(width: 12, height: 12)
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(.white)
                     }
                 }
 
@@ -65,6 +68,21 @@ struct MedicationCard: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityValue(isSelected ? "Selected" : "Not selected")
+    }
+}
+
+struct MedicationAlternativeNotice: View {
+    let medications: [Medication]
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "info.circle").foregroundStyle(AppStyle.refill).padding(.top, 2)
+            Text("\(medications.map(\.brandName).joined(separator: " and ")) may be alternatives or biosimilars. Confirm that you currently take both.")
+                .font(.system(size: 13)).foregroundStyle(AppStyle.muted).lineSpacing(3)
+        }
+        .padding(15).frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppStyle.refill.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
     }
 }
 #Preview {

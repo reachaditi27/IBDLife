@@ -112,7 +112,9 @@ struct DosingScheduleView: View {
                         .frame(height: 18)
 
                     Text(
-                        "We'll use this to send timely reminders and track your adherence over time."
+                        medication.isNutrition
+                            ? "We'll use this to send timely nutrition reminders and track your routine over time."
+                            : "We'll use this to send timely reminders and track your adherence over time."
                     )
                     .font(.subheadline)
                     .foregroundColor(
@@ -129,7 +131,7 @@ struct DosingScheduleView: View {
                     // MARK: Frequency
 
                     Text(
-                        "How often do you take your medication?"
+                        medication.isNutrition ? "How often do you use this nutrition?" : "How often do you take your medication?"
                     )
                     .font(
                         .system(
@@ -166,7 +168,9 @@ struct DosingScheduleView: View {
                     // MARK: Previous Dose
 
                     Text(
-                        "Have you already taken a dose of this medication?"
+                        medication.isNutrition
+                            ? "Have you already had a serving today?"
+                            : "Have you already taken a dose of this medication?"
                     )
                     .font(
                         .system(
@@ -715,7 +719,7 @@ struct Step7PlaceholderView: View {
                 )
 
             Text(
-                "Your medication schedule is ready. Turn on reminders for scheduled doses and upcoming refills."
+                "Your treatment schedules are ready. Turn on reminders for medication doses, nutrition servings, and upcoming supplies."
             )
             .font(.subheadline)
             .foregroundColor(

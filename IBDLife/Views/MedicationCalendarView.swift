@@ -1,3 +1,4 @@
+import Charts
 import SwiftUI
 
 struct MedicationCalendarView: View {
@@ -142,28 +143,137 @@ struct MedicationCalendarView: View {
 }
 
 struct DoseHistoryView: View {
-    @EnvironmentObject var onboarding: OnboardingData
-    private var records: [DoseRecord] {
-        let cutoff = Calendar.current.date(byAdding: .day, value: -90, to: Date())!
-        return onboarding.doseRecords.filter { $0.recordedDate >= cutoff }.sorted { $0.recordedDate > $1.recordedDate }
-    }
     var body: some View {
-        AppPage {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("Dose history").font(AppStyle.serif())
-                Text((onboarding.treatments.count == 1 ? onboarding.treatments.first?.frequency.map { $0.title + " · Last 90 days" } : nil) ?? "Last 90 days")
-                    .font(.system(size: 14)).foregroundStyle(AppStyle.muted)
-            }
-            if records.isEmpty {
-                EmptyMessage(title: "No recorded doses yet", detail: "After you confirm a dose was taken, it will appear here.")
-            }
-            VStack(spacing: 10) {
-                ForEach(records) { record in DoseHistoryRow(record: record) }
-            }
-        }
+        TreatmentHistoryView(kind: .medication)
     }
 }
 
+struct NutritionHistoryView: View {
+    var body: some View {
+        TreatmentHistoryView(kind: .nutrition)
+    }
+}
+
+private enum TreatmentHistoryKind {
+    case medication
+    case nutrition
+
+    var title: String { self == .medication ? "Dose history" : "Nutrition history" }
+    var totalLabel: String { self == .medication ? "Doses recorded" : "Servings recorded" }
+    var emptyTitle: String { self == .medication ? "No recorded doses yet" : "No recorded nutrition yet" }
+    var emptyDetail: String {
+        self == .medication
+            ? "After you confirm a medication dose, your activity chart will appear here."
+            : "After you confirm a nutrition serving, your activity chart will appear here."
+    }
+    var color: Color { self == .medication ? AppStyle.green : AppStyle.refill }
+    var isNutrition: Bool { self == .nutrition }
+}
+
+private struct TreatmentHistoryView: View {
+    let kind: TreatmentHistoryKind
+    @EnvironmentObject var onboarding: OnboardingData
+    private let calendar = Calendar.current
+
+    private var records: [DoseRecord] {
+        onboarding.doseRecords
+            .filter { onboarding.plan(for: $0.treatmentID).isNutrition == kind.isNutrition }
+            .sorted { $0.recordedDate > $1.recordedDate }
+    }
+    private var buckets: [TreatmentHistoryBucket] {
+        let currentWeek = calendar.dateInterval(of: .weekOfYear, for: Date())!.start
+        let firstWeek = calendar.date(byAdding: .weekOfYear, value: -11, to: currentWeek)!
+        return (0..<12).map { offset in
+            let start = calendar.date(byAdding: .weekOfYear, value: offset, to: firstWeek)!
+            let end = calendar.date(byAdding: .weekOfYear, value: 1, to: start)!
+            return TreatmentHistoryBucket(
+                weekStart: start,
+                count: records.count { $0.recordedDate >= start && $0.recordedDate < end }
+            )
+        }
+    }
+    private var visibleTotal: Int { buckets.reduce(0) { $0 + $1.count } }
+    private var activeWeeks: Int { buckets.count { $0.count > 0 } }
+    private var chartSummary: String {
+        let noun = kind == .medication ? "doses" : "nutrition servings"
+        return "\(visibleTotal) \(noun) recorded across \(activeWeeks) of the last 12 weeks."
+    }
+
+    var body: some View {
+        AppPage {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(kind.title).font(AppStyle.serif())
+                Text("Your recorded activity over the last 12 weeks")
+                    .font(.system(size: 14)).foregroundStyle(AppStyle.muted)
+            }
+            if records.isEmpty {
+                EmptyMessage(title: kind.emptyTitle, detail: kind.emptyDetail)
+            } else {
+                AppCard {
+                    VStack(alignment: .leading, spacing: 20) {
+                        HStack(spacing: 18) {
+                            historyMetric(value: "\(visibleTotal)", label: kind.totalLabel)
+                            Divider().frame(height: 38)
+                            historyMetric(value: "\(activeWeeks)", label: "Active weeks")
+                        }
+
+                        Chart(buckets) { bucket in
+                            BarMark(
+                                x: .value("Week", bucket.weekStart, unit: .weekOfYear),
+                                y: .value(kind.totalLabel, bucket.count)
+                            )
+                            .foregroundStyle(kind.color)
+                            .cornerRadius(4)
+                            .accessibilityLabel(bucket.weekStart.formatted(.dateTime.month(.abbreviated).day()))
+                            .accessibilityValue("\(bucket.count) \(kind == .medication ? "doses" : "servings")")
+                        }
+                        .chartXAxis {
+                            AxisMarks(values: .stride(by: .weekOfYear, count: 2)) {
+                                AxisGridLine().foregroundStyle(.clear)
+                                AxisTick().foregroundStyle(AppStyle.border)
+                                AxisValueLabel(format: .dateTime.month(.abbreviated).day())
+                                    .foregroundStyle(AppStyle.muted)
+                            }
+                        }
+                        .chartYAxis {
+                            AxisMarks(position: .leading) {
+                                AxisGridLine().foregroundStyle(AppStyle.border.opacity(0.65))
+                                AxisTick().foregroundStyle(.clear)
+                                AxisValueLabel().foregroundStyle(AppStyle.muted)
+                            }
+                        }
+                        .frame(height: 210)
+                        .accessibilityElement(children: .contain)
+                        .accessibilityLabel("12-week \(kind.title.lowercased()) chart")
+                        .accessibilityHint(chartSummary)
+
+                        if let latest = records.first?.recordedDate {
+                            HStack(spacing: 7) {
+                                Image(systemName: "checkmark.circle.fill").foregroundStyle(kind.color)
+                                Text("Most recent · \(latest.formatted(date: .abbreviated, time: .omitted))")
+                                    .font(.system(size: 13, weight: .medium))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func historyMetric(value: String, label: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(value).font(AppStyle.serif(28)).foregroundStyle(kind.color)
+            Text(label).font(.system(size: 12)).foregroundStyle(AppStyle.muted)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct TreatmentHistoryBucket: Identifiable {
+    let weekStart: Date
+    let count: Int
+    var id: Date { weekStart }
+}
 
 struct DoseHistoryRow: View {
     let record: DoseRecord

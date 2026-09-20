@@ -33,39 +33,11 @@ struct HomeView: View {
                         Text(onboarding.name).font(AppStyle.italic(38))
                     }
                 }.padding(.bottom, 10)
-                VStack(alignment: .leading, spacing: 14) {
-                    AppSectionLabel(title: "Today's medications")
-                    if todayDoses.isEmpty && todayRecords.isEmpty {
-                        AppCard {
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text("No doses today").font(.system(size: 15, weight: .medium))
-                                if let next = upcoming.first {
-                                    Text("Next: \(name(for: next.treatmentID)) on \(next.date.formatted(.dateTime.month(.abbreviated).day())) (\(daysUntil(next.date)) days)")
-                                        .font(.system(size: 13)).foregroundStyle(AppStyle.muted)
-                                } else {
-                                    Text("Your next scheduled dose will appear here.").font(.system(size: 13)).foregroundStyle(AppStyle.muted)
-                                }
-                            }
-                        }
-                    }
-                    ForEach(todayRecords) { record in
-                        if onboarding.plan(for: record.treatmentID).isInjection { completedCard(record) }
-                        recordedDoseRow(record)
-                    }
-                    ForEach(todayDoses) { dose in
-                        if onboarding.plan(for: dose.treatmentID).isInjection {
-                            NavigationLink(value: dose) { dueCard(dose) }.buttonStyle(.plain)
-                        }
-                        NavigationLink(value: dose) { routineDoseRow(dose) }.buttonStyle(.plain)
-                    }
-                    ForEach(onboarding.treatments.filter { $0.frequency == .asNeeded }) { plan in
-                        NavigationLink(value: ScheduledDose(treatmentID: plan.id,
-                                date: Calendar.current.startOfDay(for: now), slot: onboarding.doseRecords.filter { $0.treatmentID == plan.id }.count,
-                                ordinal: onboarding.doseRecords.filter { $0.treatmentID == plan.id }.count + 1,
-                                site: plan.isInjection ? plan.sites.first : nil)) {
-                            AppCard { Label("Record \(name(for: plan.id)) as needed", systemImage: "plus.circle").font(.system(size: 14)) }
-                        }.buttonStyle(.plain)
-                    }
+                if onboarding.treatments.contains(where: { !$0.isNutrition }) || onboarding.treatments.isEmpty {
+                    todaySection(isNutrition: false)
+                }
+                if onboarding.treatments.contains(where: \.isNutrition) {
+                    todaySection(isNutrition: true)
                 }
                 VStack(alignment: .leading, spacing: 14) {
                     AppSectionLabel(title: "Symptoms")
@@ -104,7 +76,7 @@ struct HomeView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     AppSectionLabel(title: "Upcoming")
                     if upcoming.isEmpty {
-                        EmptyMessage(title: "No upcoming doses", detail: "Your medication schedule will appear here once set up in My Profile.")
+                        EmptyMessage(title: "No upcoming doses", detail: "Your treatment schedules will appear here once set up in My Profile.")
                     }
                     ForEach(Array(upcoming.filter { $0.date > Calendar.current.startOfDay(for: now) }.prefix(3))) { dose in
                         NavigationLink { UpcomingDoseDetailView(dose: dose) } label: {
@@ -126,9 +98,10 @@ struct HomeView: View {
                     AppSectionLabel(title: "Quick actions")
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                         NavigationLink { MedicationCalendarView() } label: { quickAction("Calendar", "View all dose dates", "calendar") }
-                        NavigationLink { ProfileView() } label: { quickAction("My Profile", "Conditions & meds", "person") }
+                        NavigationLink { ProfileView() } label: { quickAction("My Profile", "Health & treatments", "person") }
                         NavigationLink { SymptomLogView() } label: { quickAction("Symptom log", "Track how you're feeling", "pills") }
-                        NavigationLink { DoseHistoryView() } label: { quickAction("Dose history", "View your medication record", "clock.arrow.circlepath") }
+                        NavigationLink { DoseHistoryView() } label: { quickAction("Dose history", "Medication dose activity", "chart.bar.xaxis") }
+                        NavigationLink { NutritionHistoryView() } label: { quickAction("Nutrition history", "Nutrition serving activity", "chart.bar.fill") }
                         NavigationLink { BMIHistoryView() } label: { quickAction("BMI history", "View body measurements", "scalemass") }
                     }.buttonStyle(.plain)
                 }
@@ -136,6 +109,52 @@ struct HomeView: View {
             .onChange(of: scenePhase) { _, phase in if phase == .active { now = Date() } }
             .navigationDestination(for: ScheduledDose.self) { dose in
                 DoseDayView(dose: dose, onRecorded: { path = NavigationPath() })
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func todaySection(isNutrition: Bool) -> some View {
+        let doses = todayDoses.filter { onboarding.plan(for: $0.treatmentID).isNutrition == isNutrition }
+        let records = todayRecords.filter { onboarding.plan(for: $0.treatmentID).isNutrition == isNutrition }
+        let plans = onboarding.treatments.filter { $0.isNutrition == isNutrition }
+        let next = upcoming.first { onboarding.plan(for: $0.treatmentID).isNutrition == isNutrition }
+        VStack(alignment: .leading, spacing: 14) {
+            AppSectionLabel(title: isNutrition ? "Today's nutrition" : "Today's medications")
+            if doses.isEmpty && records.isEmpty && !plans.contains(where: { $0.frequency == .asNeeded }) {
+                AppCard {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(isNutrition ? "No nutrition scheduled today" : "No doses today")
+                            .font(.system(size: 15, weight: .medium))
+                        if let next {
+                            Text("Next: \(name(for: next.treatmentID)) on \(next.date.formatted(.dateTime.month(.abbreviated).day())) (\(daysUntil(next.date)) days)")
+                                .font(.system(size: 13)).foregroundStyle(AppStyle.muted)
+                        } else {
+                            Text(isNutrition ? "Your next nutrition serving will appear here."
+                                 : "Your next scheduled dose will appear here.")
+                                .font(.system(size: 13)).foregroundStyle(AppStyle.muted)
+                        }
+                    }
+                }
+            }
+            ForEach(records) { record in
+                if onboarding.plan(for: record.treatmentID).isInjection { completedCard(record) }
+                recordedDoseRow(record)
+            }
+            ForEach(doses) { dose in
+                if onboarding.plan(for: dose.treatmentID).isInjection {
+                    NavigationLink(value: dose) { dueCard(dose) }.buttonStyle(.plain)
+                }
+                NavigationLink(value: dose) { routineDoseRow(dose) }.buttonStyle(.plain)
+            }
+            ForEach(plans.filter { $0.frequency == .asNeeded }) { plan in
+                NavigationLink(value: ScheduledDose(treatmentID: plan.id,
+                        date: Calendar.current.startOfDay(for: now),
+                        slot: onboarding.doseRecords.filter { $0.treatmentID == plan.id }.count,
+                        ordinal: onboarding.doseRecords.filter { $0.treatmentID == plan.id }.count + 1,
+                        site: plan.isInjection ? plan.sites.first : nil)) {
+                    AppCard { Label("Record \(name(for: plan.id)) as needed", systemImage: "plus.circle").font(.system(size: 14)) }
+                }.buttonStyle(.plain)
             }
         }
     }

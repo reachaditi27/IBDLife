@@ -3,7 +3,9 @@ import SwiftUI
 struct SupportMomentView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @AppStorage("lastSupportAffirmationSet") private var lastAffirmationSet = -1
     @State private var expanded = false
+    @State private var affirmations: [String] = []
     var body: some View {
         AppPage(title: "You're not alone.") {
             Text("It's okay to take a breath. Many people living with IBD feel the same way.")
@@ -24,12 +26,15 @@ struct SupportMomentView: View {
                 }.frame(maxWidth: .infinity).padding(.vertical, 10)
             }
             VStack(spacing: 10) {
-                reassurance("You deserve to feel supported. We're right here with you.")
-                reassurance("Every time you show up for your health, it matters more than you know.")
-                reassurance("One step at a time is still moving forward.")
+                ForEach(affirmations, id: \.self, content: reassurance)
             }
             Button { dismiss() } label: { AppActionLabel(title: "I feel more ready now", leadingIcon: true) }
-        }.onAppear { expanded = true }
+        }.onAppear {
+            let nextIndex = SupportAffirmations.nextIndex(after: lastAffirmationSet)
+            lastAffirmationSet = nextIndex
+            affirmations = SupportAffirmations.sets[nextIndex]
+            expanded = true
+        }
     }
     private func reassurance(_ text: String) -> some View {
         Text(text).font(.system(size: 14)).foregroundStyle(AppStyle.green).lineSpacing(5)
