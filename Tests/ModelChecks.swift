@@ -31,6 +31,38 @@ struct ModelChecks {
         precondition(dst.map { calendar.component(.day, from: $0.date) } == [1, 8, 15], "Weekly dates cross DST without drifting")
         precondition(dst.allSatisfy { calendar.component(.hour, from: $0.date) == 0 })
 
+        let reminderNow = calendar.date(from: DateComponents(year: 2026, month: 9, day: 7, hour: 8))!
+        plan.frequency = .everyTwoWeeks; plan.startDate = september
+        plan.dosesPerOrder = 2; plan.dosesRemaining = 2
+        let reminders = MedicationReminderPlanner.reminders(treatments: [plan], records: [],
+                                                             now: reminderNow, calendar: calendar)
+        let doseReminders = reminders.filter { $0.kind == .dose }
+        let refillReminders = reminders.filter { $0.kind == .refill }
+        precondition(doseReminders.first?.date == calendar.date(from: DateComponents(year: 2026, month: 9, day: 7, hour: 9)),
+                     "Morning slot schedules at 9 AM local time")
+        precondition(refillReminders.first?.date == calendar.date(from: DateComponents(year: 2026, month: 9, day: 14, hour: 9)),
+                     "Refill reminder is one week before the projected last dose")
+        precondition(Set(reminders.map(\.id)).count == reminders.count, "Reminder identifiers are stable and unique")
+        let recordedFirst = DoseRecord(id: "humira-\(Int(september.timeIntervalSince1970))-0", treatmentID: "humira",
+                                       scheduledDate: september, recordedDate: september, site: nil, doseNumber: 1)
+        let afterRecording = MedicationReminderPlanner.reminders(treatments: [plan], records: [recordedFirst],
+                                                                 now: reminderNow, calendar: calendar)
+        precondition(!afterRecording.contains { $0.id == "ibdlife.dose.\(recordedFirst.id)" },
+                     "Recorded doses do not keep pending reminders")
+        var depletedPlan = plan
+        depletedPlan.frequency = .onceDaily; depletedPlan.dosesPerOrder = 1; depletedPlan.dosesRemaining = 0
+        let depletedReminders = MedicationReminderPlanner.reminders(treatments: [depletedPlan], records: [],
+                                                                     now: reminderNow, calendar: calendar)
+        let catchUpDate = calendar.date(byAdding: .minute, value: 1, to: reminderNow)
+        precondition(depletedReminders.filter { $0.kind == .refill && $0.date == catchUpDate }.count == 1,
+                     "Overdue refill alerts are coalesced instead of arriving in a burst")
+        var frequentPlan = plan
+        frequentPlan.frequency = .threeTimesDaily
+        precondition(MedicationReminderPlanner.reminders(treatments: [frequentPlan], records: [],
+                                                          now: reminderNow, calendar: calendar).count
+                     == MedicationReminderPlanner.maximumPending,
+                     "Notification plan stays below the system pending-request limit")
+
         let temporary = FileManager.default.temporaryDirectory.appendingPathComponent("IBDLife-test-\(UUID().uuidString)/data.json")
         defer { try? FileManager.default.removeItem(at: temporary.deletingLastPathComponent()) }
         let store = OnboardingData(fileURL: temporary)
@@ -58,11 +90,28 @@ struct ModelChecks {
         precondition(store.doseRecords.count == 1, "Future doses cannot be recorded")
         store.addSymptom(mood: .okay, note: "  A test note  ")
         store.addSymptom(mood: .great, note: "")
+        precondition(store.updateBodyMeasurement(unitSystem: .imperial, weight: "160",
+                                                 heightFeet: "5", heightInches: "10", at: today))
+        precondition(abs((store.currentBodyMeasurement?.bmi ?? 0) - 22.96) < 0.02,
+                     "Imperial height and weight produce the expected BMI")
+        precondition(store.bodyMeasurements.count == 1)
+        precondition(store.updateBodyMeasurement(unitSystem: .imperial, weight: "160",
+                                                 heightFeet: "5", heightInches: "10", at: today),
+                     "Valid unchanged measurements are accepted")
+        precondition(store.bodyMeasurements.count == 1, "Unchanged measurements do not duplicate history")
+        precondition(!store.updateBodyMeasurement(unitSystem: .metric, weight: "invalid",
+                                                  heightCentimeters: "170", at: today))
+        precondition(store.unitSystem == .imperial && store.weight == "160" && store.bodyMeasurements.count == 1,
+                     "Invalid measurement edits do not replace saved values")
+        store.medicationRemindersEnabled = true
         store.completedOnboarding = true
         let restored = OnboardingData(fileURL: temporary)
         precondition(restored.name == store.name && restored.age == "30")
         precondition(restored.treatments.count == 2 && restored.completedOnboarding)
+        precondition(restored.medicationRemindersEnabled, "Reminder opt-in persists locally")
         precondition(restored.symptoms.count == 2 && restored.symptoms[1].note == "A test note")
+        precondition(restored.bodyMeasurements.count == 1 && abs(restored.bodyMeasurements[0].bmi - 22.96) < 0.02,
+                     "BMI history persists locally")
         precondition(restored.doseRecords.count == 1 && restored.plan(for: "humira").dosesRemaining == 1)
         precondition(restored.doses(from: today, through: today).count == 2, "Recorded dose stays recorded after relaunch")
         precondition(restored.storageError == nil)
@@ -108,6 +157,6 @@ struct ModelChecks {
         precondition(partial.unrecordedPastDoses().count == 1)
         precondition(partial.doseRecords.last?.recordedDate == yesterday, "Historical entry keeps actual date taken")
         precondition(partial.doses(from: today, through: today).count == 2, "Historical entry leaves today's slots intact")
-        print("PASS: recurrence, DST, per-day slots, site rotation, multiple treatments, explicit history, duplicate/future guards, refill counts, symptoms, and persistence")
+        print("PASS: recurrence, DST, reminders/refills, BMI/history, per-day slots, site rotation, multiple treatments, explicit history, duplicate/future guards, refill counts, symptoms, and persistence")
     }
 }

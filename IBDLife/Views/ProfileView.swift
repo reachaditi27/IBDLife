@@ -5,7 +5,7 @@ struct ProfileView: View {
     var body: some View {
         AppPage(title: "My Profile") {
             VStack(alignment: .leading, spacing: 12) {
-                AppSectionLabel(title: "Conditions")
+                sectionHeader("Conditions") { ProfileConditionsEditor() }
                 if onboarding.diagnoses.isEmpty {
                     Text("No conditions added").foregroundStyle(AppStyle.muted)
                 }
@@ -18,30 +18,64 @@ struct ProfileView: View {
                     }
                 }
             }
-            if onboarding.treatments.isEmpty {
-                EmptyMessage(title: "No medications added", detail: "You can still use symptom check-ins and support.")
+            VStack(alignment: .leading, spacing: 10) {
+                sectionHeader("BMI") { BodyMeasurementEditorView() }
+                AppCard(padding: 16) {
+                    if let measurement = onboarding.currentBodyMeasurement {
+                        HStack(alignment: .firstTextBaseline) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text("BMI \(measurement.bmi.formatted(.number.precision(.fractionLength(1))))")
+                                    .font(AppStyle.serif(23))
+                                Text(currentMeasurementSummary(measurement))
+                                    .font(.system(size: 13)).foregroundStyle(AppStyle.muted)
+                            }
+                            Spacer()
+                            NavigationLink("History") { BMIHistoryView() }
+                                .font(.system(size: 13, weight: .medium)).foregroundStyle(AppStyle.green)
+                        }
+                    } else {
+                        Text("Add height and weight to calculate BMI.")
+                            .font(.system(size: 14)).foregroundStyle(AppStyle.muted)
+                    }
+                }
+            }
+            VStack(alignment: .leading, spacing: 10) {
+                AppSectionLabel(title: "Reminders")
+                AppCard(padding: 15) { MedicationReminderToggle() }
+            }
+            VStack(alignment: .leading, spacing: 12) {
+                sectionHeader("Medications") { ProfileMedicationsEditor() }
+                if onboarding.treatments.isEmpty {
+                    EmptyMessage(title: "No medications added", detail: "You can still use symptom check-ins and support.")
+                } else {
+                    ForEach(onboarding.treatments) { plan in
+                        AppCard(padding: 15) {
+                            Text("\(plan.medication?.brandName ?? plan.id)\(Text(plan.medication?.genericName.map { " (\($0))" } ?? "").foregroundColor(AppStyle.muted))")
+                                .font(.system(size: 14))
+                        }
+                    }
+                }
             }
             ForEach(onboarding.treatments) { plan in
                 VStack(alignment: .leading, spacing: 22) {
-                    profileSection("Medications") {
-                        Text("\(plan.medication?.brandName ?? plan.id)\(Text(plan.medication?.genericName.map { " (\($0))" } ?? "").foregroundColor(AppStyle.muted))")
-                            .font(.system(size: 14))
-                    }
-                    profileSection("Prescription form") {
+                    Text(plan.medication?.brandName ?? plan.id)
+                        .font(AppStyle.serif(24)).padding(.top, 4)
+                    editableSection("Prescription form") {
+                        ProfilePrescriptionFormEditor(treatmentID: plan.id)
+                    } content: {
                         VStack(alignment: .leading, spacing: 10) {
-                            ForEach(plan.orderedForms) { form in
-                                Text("\(form.icon)  \(form.rawValue)").font(.system(size: 14))
+                            if plan.orderedForms.isEmpty {
+                                Text("Not set up").foregroundStyle(AppStyle.muted)
+                            } else {
+                                ForEach(plan.orderedForms) { form in
+                                    Text("\(form.icon)  \(form.rawValue)").font(.system(size: 14))
+                                }
                             }
                         }
                     }
                     VStack(alignment: .leading, spacing: 10) {
-                        HStack {
-                            AppSectionLabel(title: "Dosing schedule")
-                            Spacer()
-                            if plan.frequency == nil {
-                                NavigationLink("Set up") { ProfileScheduleEditor(treatmentID: plan.id) }
-                                    .font(.system(size: 13)).foregroundStyle(AppStyle.green)
-                            }
+                        sectionHeader("Dosing schedule", actionTitle: plan.frequency == nil ? "Set up" : "Edit") {
+                            ProfileScheduleEditor(treatmentID: plan.id)
                         }
                         AppCard(padding: 15) {
                             VStack(alignment: .leading, spacing: 5) {
@@ -54,11 +88,8 @@ struct ProfileView: View {
                         }
                     }
                     VStack(alignment: .leading, spacing: 10) {
-                        HStack {
-                            AppSectionLabel(title: "Doses per order")
-                            Spacer()
-                            NavigationLink("Edit") { DosesPerOrderEditorView(treatmentID: plan.id) }
-                                .font(.system(size: 13)).foregroundStyle(AppStyle.green)
+                        sectionHeader("Doses per order") {
+                            DosesPerOrderEditorView(treatmentID: plan.id)
                         }
                         AppCard(padding: 15) {
                             VStack(alignment: .leading, spacing: 5) {
@@ -75,9 +106,30 @@ struct ProfileView: View {
         }
     }
 
-    private func profileSection<Content: View>(_ title: String, @ViewBuilder content: @escaping () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+    private func currentMeasurementSummary(_ measurement: BodyMeasurement) -> String {
+        let weight = measurement.weight(for: onboarding.unitSystem)
+        let height = measurement.height(for: onboarding.unitSystem)
+        if onboarding.unitSystem == .metric {
+            return "\(weight.formatted(.number.precision(.fractionLength(1)))) kg · \(height.primary.formatted(.number.precision(.fractionLength(1)))) cm"
+        }
+        return "\(weight.formatted(.number.precision(.fractionLength(1)))) lb · \(Int(height.primary)) ft \(Int((height.secondary ?? 0).rounded())) in"
+    }
+
+    private func sectionHeader<Destination: View>(_ title: String, actionTitle: String = "Edit",
+                                                   @ViewBuilder destination: () -> Destination) -> some View {
+        HStack {
             AppSectionLabel(title: title)
+            Spacer()
+            NavigationLink(actionTitle, destination: destination)
+                .font(.system(size: 13)).foregroundStyle(AppStyle.green)
+        }
+    }
+
+    private func editableSection<Destination: View, Content: View>(_ title: String,
+                               @ViewBuilder destination: () -> Destination,
+                               @ViewBuilder content: @escaping () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            sectionHeader(title, destination: destination)
             AppCard(padding: 15, content: content)
         }
     }
@@ -160,7 +212,7 @@ private struct ProfileScheduleEditor: View {
     @Environment(\.dismiss) private var dismiss
     var body: some View {
         if let medication = onboarding.plan(for: treatmentID).medication {
-            DosingScheduleView(medication: medication, onContinue: { dismiss() })
+            DosingScheduleView(medication: medication, onContinue: { dismiss() }, isProfileEdit: true)
         }
     }
 }

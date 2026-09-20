@@ -23,11 +23,14 @@ final class OnboardingData: ObservableObject {
     @Published var heightCentimeters = "" { didSet { save() } }
     @Published var diagnoses: [String] = [] { didSet { save() } }
     @Published var medications: [String] = [] { didSet { save() } }
-    @Published var treatments: [TreatmentPlan] = [] { didSet { save() } }
+    @Published var treatments: [TreatmentPlan] = [] { didSet { save(); reminderRevision += 1 } }
     @Published var symptoms: [SymptomEntry] = [] { didSet { save() } }
-    @Published var doseRecords: [DoseRecord] = [] { didSet { save() } }
-    @Published var completedOnboarding = false { didSet { save() } }
+    @Published var doseRecords: [DoseRecord] = [] { didSet { save(); reminderRevision += 1 } }
+    @Published var bodyMeasurements: [BodyMeasurement] = [] { didSet { save() } }
+    @Published var completedOnboarding = false { didSet { save(); reminderRevision += 1 } }
+    @Published var medicationRemindersEnabled = false { didSet { save(); reminderRevision += 1 } }
     @Published var storageError: String?
+    @Published private(set) var reminderRevision = 0
 
     private let fileURL: URL?
     private var isLoading = true
@@ -43,6 +46,11 @@ final class OnboardingData: ObservableObject {
             heightCentimeters = data.heightCentimeters; diagnoses = data.diagnoses
             medications = data.medications; treatments = data.treatments; symptoms = data.symptoms
             doseRecords = data.doseRecords; completedOnboarding = data.completedOnboarding
+            medicationRemindersEnabled = data.medicationRemindersEnabled ?? false
+            bodyMeasurements = data.bodyMeasurements ?? []
+            if bodyMeasurements.isEmpty, let measurement = makeBodyMeasurement(date: savedDate(for: fileURL)) {
+                bodyMeasurements = [measurement]
+            }
         } catch {
             storageError = "Your saved data could not be opened. Your original file has been kept."
         }
@@ -58,6 +66,8 @@ final class OnboardingData: ObservableObject {
         var weight: String; var heightFeet: String; var heightInches: String; var heightCentimeters: String
         var diagnoses: [String]; var medications: [String]; var treatments: [TreatmentPlan]
         var symptoms: [SymptomEntry]; var doseRecords: [DoseRecord]; var completedOnboarding: Bool
+        var medicationRemindersEnabled: Bool?
+        var bodyMeasurements: [BodyMeasurement]?
     }
 
     private func save() {
@@ -67,7 +77,9 @@ final class OnboardingData: ObservableObject {
                                     weight: weight, heightFeet: heightFeet, heightInches: heightInches,
                                     heightCentimeters: heightCentimeters, diagnoses: diagnoses,
                                     medications: medications, treatments: treatments, symptoms: symptoms,
-                                    doseRecords: doseRecords, completedOnboarding: completedOnboarding)
+                                    doseRecords: doseRecords, completedOnboarding: completedOnboarding,
+                                    medicationRemindersEnabled: medicationRemindersEnabled,
+                                    bodyMeasurements: bodyMeasurements)
             try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             try JSONEncoder().encode(snapshot).write(to: fileURL, options: [.atomic, .completeFileProtectionUnlessOpen])
         } catch {
@@ -161,5 +173,78 @@ final class OnboardingData: ObservableObject {
     func addSymptom(mood: Mood, note: String) {
         symptoms.insert(SymptomEntry(date: Date(), mood: mood,
                                     note: note.trimmingCharacters(in: .whitespacesAndNewlines)), at: 0)
+    }
+
+    var currentBodyMeasurement: BodyMeasurement? { makeBodyMeasurement(date: Date()) }
+
+    @discardableResult
+    func recordCurrentBodyMeasurement(at date: Date = Date()) -> Bool {
+        guard let measurement = makeBodyMeasurement(date: date) else { return false }
+        appendBodyMeasurementIfChanged(measurement)
+        return true
+    }
+
+    private func appendBodyMeasurementIfChanged(_ measurement: BodyMeasurement) {
+        if let previous = bodyMeasurements.last,
+           abs(previous.weightKilograms - measurement.weightKilograms) < 0.01,
+           abs(previous.heightCentimeters - measurement.heightCentimeters) < 0.01 {
+            return
+        }
+        bodyMeasurements.append(measurement)
+    }
+
+    @discardableResult
+    func updateBodyMeasurement(unitSystem: UnitSystem, weight: String, heightFeet: String = "",
+                               heightInches: String = "", heightCentimeters: String = "",
+                               at date: Date = Date()) -> Bool {
+        guard let measurement = Self.makeBodyMeasurement(unitSystem: unitSystem, weight: weight,
+                                                         heightFeet: heightFeet, heightInches: heightInches,
+                                                         heightCentimeters: heightCentimeters, date: date) else {
+            return false
+        }
+        self.unitSystem = unitSystem
+        self.weight = weight.trimmingCharacters(in: .whitespacesAndNewlines)
+        if unitSystem == .imperial {
+            self.heightFeet = heightFeet.trimmingCharacters(in: .whitespacesAndNewlines)
+            self.heightInches = heightInches.trimmingCharacters(in: .whitespacesAndNewlines)
+        } else {
+            self.heightCentimeters = heightCentimeters.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        appendBodyMeasurementIfChanged(measurement)
+        return true
+    }
+
+    private func makeBodyMeasurement(date: Date) -> BodyMeasurement? {
+        Self.makeBodyMeasurement(unitSystem: unitSystem, weight: weight, heightFeet: heightFeet,
+                                 heightInches: heightInches, heightCentimeters: heightCentimeters, date: date)
+    }
+
+    private static func makeBodyMeasurement(unitSystem: UnitSystem, weight: String, heightFeet: String,
+                                            heightInches: String, heightCentimeters: String,
+                                            date: Date) -> BodyMeasurement? {
+        guard let savedWeight = Double(weight.trimmingCharacters(in: .whitespacesAndNewlines)),
+              savedWeight > 0 else { return nil }
+        let weightKilograms: Double
+        let centimeters: Double
+        if unitSystem == .metric {
+            guard let savedHeight = Double(heightCentimeters.trimmingCharacters(in: .whitespacesAndNewlines)),
+                  savedHeight > 0 else { return nil }
+            weightKilograms = savedWeight
+            centimeters = savedHeight
+        } else {
+            let feet = Double(heightFeet.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
+            let inches = Double(heightInches.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
+            let totalInches = feet * 12 + inches
+            guard totalInches > 0 else { return nil }
+            weightKilograms = savedWeight * 0.45359237
+            centimeters = totalInches * 2.54
+        }
+        guard weightKilograms.isFinite, centimeters.isFinite else { return nil }
+        return BodyMeasurement(date: date, weightKilograms: weightKilograms,
+                               heightCentimeters: centimeters)
+    }
+
+    private func savedDate(for fileURL: URL) -> Date {
+        (try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.modificationDate] as? Date) ?? Date()
     }
 }

@@ -21,6 +21,10 @@ extension OnboardingData {
         func offset(_ days: Int) -> Date { calendar.date(byAdding: .day, value: days, to: today)! }
         store.name = scenario == "no-dose" ? "Test" : ""
         store.diagnoses = [Diagnosis.crohns.rawValue]
+        store.updateBodyMeasurement(unitSystem: .imperial, weight: "162", heightFeet: "5", heightInches: "10",
+                                    at: offset(-30))
+        store.updateBodyMeasurement(unitSystem: .imperial, weight: "160", heightFeet: "5", heightInches: "10",
+                                    at: today)
         store.selectMedications(MedicationDatabase.medications.filter { $0.id == "humira" })
         var plan = store.plan(for: "humira")
         plan.forms = [.autoInjector]

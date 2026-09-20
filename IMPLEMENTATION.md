@@ -37,12 +37,13 @@ data in the simulator app's `Application Support/IBDLife/data.json`.
 
 ## Remaining scope outside these checkpoints
 
-Local notification delivery, broader profile/schedule editing, data export/recovery UI,
+Notification action routing, broader profile/schedule editing, data export/recovery UI,
 physical-device/distribution checks, and comprehensive accessibility testing are not
 part of this bounded pass. Refill indicators are estimates based on recorded supply,
-not pharmacy integration. Existing unused `ContentView` and `Step6PlaceholderView`
-are retained to avoid unrelated cleanup. The setup reminder wording predates actual
-notification support.
+not pharmacy integration. Local dose and refill notifications are opt-in, use the
+saved schedule's morning/afternoon/evening slots (9 AM/1 PM/7 PM local time), and
+refresh on launch and relevant local plan changes. Existing unused `ContentView` and
+`Step6PlaceholderView` are retained to avoid unrelated cleanup.
 
 ## September 8, 2026 checkpoint results
 

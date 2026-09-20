@@ -5,6 +5,7 @@ struct DosingScheduleView: View {
     let medication: Medication
     var onContinue: (() -> Void)? = nil
     var onBack: (() -> Void)? = nil
+    var isProfileEdit = false
     @EnvironmentObject var onboarding: OnboardingData
     @State private var showCompletion = false
 
@@ -67,17 +68,19 @@ struct DosingScheduleView: View {
 
                     // MARK: Progress
 
-                    Text("STEP 6 OF 7")
-                        .font(
-                            .caption.weight(.bold)
-                        )
-                        .tracking(1.5)
-                        .foregroundColor(
-                            .ibdSecondaryText
-                        )
+                    if !isProfileEdit {
+                        Text("STEP 6 OF 7")
+                            .font(
+                                .caption.weight(.bold)
+                            )
+                            .tracking(1.5)
+                            .foregroundColor(
+                                .ibdSecondaryText
+                            )
 
-                    Spacer()
-                        .frame(height: 14)
+                        Spacer()
+                            .frame(height: 14)
+                    }
 
                     // MARK: Title
 
@@ -86,7 +89,7 @@ struct DosingScheduleView: View {
                         spacing: 2
                     ) {
 
-                        Text("Set up your")
+                        Text(isProfileEdit ? "Edit your" : "Set up your")
                             .font(
                                 .system(
                                     size: 34,
@@ -475,7 +478,7 @@ struct DosingScheduleView: View {
 
             } label: {
 
-                Text("Skip for now")
+                Text(isProfileEdit ? "Clear schedule" : "Skip for now")
                     .font(.subheadline)
                     .underline()
                     .foregroundColor(
@@ -496,7 +499,7 @@ struct DosingScheduleView: View {
 
                 HStack(spacing: 8) {
 
-                    Text("Continue")
+                    Text(isProfileEdit ? "Save" : "Continue")
 
                     Image(
                         systemName:
@@ -712,13 +715,17 @@ struct Step7PlaceholderView: View {
                 )
 
             Text(
-                "Your medication schedule is ready. We'll help you stay on track when you need support."
+                "Your medication schedule is ready. Turn on reminders for scheduled doses and upcoming refills."
             )
             .font(.subheadline)
             .foregroundColor(
                 .ibdSecondaryText
             )
             .lineSpacing(4)
+
+            AppCard(padding: 16) {
+                MedicationReminderToggle()
+            }
 
             Spacer()
             Button {

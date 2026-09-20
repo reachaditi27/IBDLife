@@ -18,6 +18,28 @@ struct TreatmentPlan: Identifiable, Codable, Hashable {
     var orderedForms: [AdministrationForm] { AdministrationForm.allCases.filter { forms.contains($0) } }
 }
 
+struct BodyMeasurement: Identifiable, Codable, Hashable {
+    var id = UUID()
+    var date: Date
+    var weightKilograms: Double
+    var heightCentimeters: Double
+
+    var bmi: Double {
+        let heightMeters = heightCentimeters / 100
+        return weightKilograms / (heightMeters * heightMeters)
+    }
+
+    func weight(for unitSystem: UnitSystem) -> Double {
+        unitSystem == .metric ? weightKilograms : weightKilograms / 0.45359237
+    }
+
+    func height(for unitSystem: UnitSystem) -> (primary: Double, secondary: Double?) {
+        if unitSystem == .metric { return (heightCentimeters, nil) }
+        let totalInches = heightCentimeters / 2.54
+        return ((totalInches / 12).rounded(.down), totalInches.truncatingRemainder(dividingBy: 12))
+    }
+}
+
 enum Mood: String, CaseIterable, Codable, Identifiable {
     case great = "Great", okay = "Okay", rough = "Rough", notWell = "Not well"
     var id: String { rawValue }

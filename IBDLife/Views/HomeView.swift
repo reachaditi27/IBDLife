@@ -129,6 +129,7 @@ struct HomeView: View {
                         NavigationLink { ProfileView() } label: { quickAction("My Profile", "Conditions & meds", "person") }
                         NavigationLink { SymptomLogView() } label: { quickAction("Symptom log", "Track how you're feeling", "pills") }
                         NavigationLink { DoseHistoryView() } label: { quickAction("Dose history", "View your medication record", "clock.arrow.circlepath") }
+                        NavigationLink { BMIHistoryView() } label: { quickAction("BMI history", "View body measurements", "scalemass") }
                     }.buttonStyle(.plain)
                 }
             }.onAppear { now = Date() }

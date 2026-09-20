@@ -229,6 +229,9 @@ struct AboutYouView: View {
                 } label: {
                     PrimaryButton(title: "Continue")
                 }
+                .simultaneousGesture(TapGesture().onEnded {
+                    onboarding.recordCurrentBodyMeasurement()
+                })
 
                 Spacer()
                     .frame(height: 24)
