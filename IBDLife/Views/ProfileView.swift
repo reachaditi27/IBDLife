@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ProfileView: View {
     @EnvironmentObject var onboarding: OnboardingData
+    @State private var showResetConfirmation = false
     private var medicationPlans: [TreatmentPlan] { onboarding.treatments.filter { !$0.isNutrition } }
     private var nutritionPlans: [TreatmentPlan] { onboarding.treatments.filter(\.isNutrition) }
     var body: some View {
@@ -98,6 +99,38 @@ struct ProfileView: View {
                     }
                 }
             }
+            VStack(alignment: .leading, spacing: 10) {
+                AppSectionLabel(title: "Data")
+                Button {
+                    showResetConfirmation = true
+                } label: {
+                    AppCard(padding: 15) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "trash")
+                                .font(.system(size: 15, weight: .semibold))
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Clear all data & reset")
+                                    .font(.system(size: 15, weight: .semibold))
+                                Text("Erase your local data and return to onboarding")
+                                    .font(.system(size: 12)).foregroundStyle(AppStyle.muted)
+                            }
+                            Spacer()
+                        }
+                        .foregroundStyle(.red)
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Asks for confirmation before clearing your data")
+            }
+        }
+        .confirmationDialog("Clear all data and reset?", isPresented: $showResetConfirmation,
+                            titleVisibility: .visible) {
+            Button("Clear all data", role: .destructive) {
+                onboarding.resetAllData()
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("This permanently erases your profile, conditions, treatments, reminders, dose and nutrition history, symptoms, and BMI history from this device. This cannot be undone.")
         }
     }
 

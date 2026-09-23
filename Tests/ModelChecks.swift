@@ -145,6 +145,18 @@ struct ModelChecks {
         precondition(restored.doseRecords.count == 1 && restored.plan(for: "humira").dosesRemaining == 1)
         precondition(restored.doses(from: today, through: today).count == 2, "Recorded dose stays recorded after relaunch")
         precondition(restored.storageError == nil)
+        UserDefaults.standard.set(2, forKey: "lastSupportAffirmationSet")
+        precondition(restored.resetAllData(), "A local reset succeeds")
+        precondition(!FileManager.default.fileExists(atPath: temporary.path), "Reset removes the saved snapshot")
+        precondition(restored.name.isEmpty && restored.diagnoses.isEmpty && restored.treatments.isEmpty &&
+                     restored.symptoms.isEmpty && restored.doseRecords.isEmpty && restored.bodyMeasurements.isEmpty &&
+                     !restored.completedOnboarding && !restored.medicationRemindersEnabled,
+                     "Reset restores the first-launch in-memory state")
+        precondition(UserDefaults.standard.object(forKey: "lastSupportAffirmationSet") == nil,
+                     "Reset removes local support-screen preferences")
+        let resetStore = OnboardingData(fileURL: temporary)
+        precondition(!resetStore.completedOnboarding && resetStore.name.isEmpty,
+                     "A reset relaunch starts onboarding")
         // An already-taken morning/afternoon dose must leave later slots today available.
         let partial = OnboardingData(fileURL: nil)
         partial.configureSchedule(id: "ensure plus", frequency: .twiceDaily, date: today,
@@ -187,6 +199,6 @@ struct ModelChecks {
         precondition(partial.unrecordedPastDoses().count == 1)
         precondition(partial.doseRecords.last?.recordedDate == yesterday, "Historical entry keeps actual date taken")
         precondition(partial.doses(from: today, through: today).count == 2, "Historical entry leaves today's slots intact")
-        print("PASS: recurrence, DST, condition/medication/nutrition selection, rotating support, reminders/refills, BMI/history, per-day slots, site rotation, multiple treatments, explicit history, duplicate/future guards, refill counts, symptoms, and persistence")
+        print("PASS: recurrence, DST, condition/medication/nutrition selection, rotating support, reminders/refills, BMI/history, local reset, per-day slots, site rotation, multiple treatments, explicit history, duplicate/future guards, refill counts, symptoms, and persistence")
     }
 }

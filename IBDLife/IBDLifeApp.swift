@@ -10,18 +10,10 @@ struct IBDLifeApp: App {
     var body: some Scene {
         WindowGroup {
             Group {
-                #if DEBUG
-                if ProcessInfo.processInfo.arguments.contains("--review-profile") {
-                    NavigationStack { ProfileView() }
-                } else if ProcessInfo.processInfo.arguments.contains("--review-bmi-history") {
-                    NavigationStack { BMIHistoryView() }
-                } else if onboarding.completedOnboarding { HomeView() }
-                else { WelcomeView() }
-                #else
                 if onboarding.completedOnboarding { HomeView() }
                 else { WelcomeView() }
-                #endif
             }
+            .id(onboarding.completedOnboarding)
             .environmentObject(onboarding)
             .preferredColorScheme(.light)
             .task(id: onboarding.reminderRevision) {

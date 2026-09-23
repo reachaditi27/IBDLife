@@ -87,6 +87,44 @@ final class OnboardingData: ObservableObject {
         }
     }
 
+    /// Removes the local snapshot and restores the in-memory store to its first-launch state.
+    /// Notification authorization remains a system setting, but the reminder preference is reset
+    /// and the resulting revision causes IBDLife's pending notifications to be removed.
+    @discardableResult
+    func resetAllData() -> Bool {
+        do {
+            if let fileURL, FileManager.default.fileExists(atPath: fileURL.path) {
+                try FileManager.default.removeItem(at: fileURL)
+            }
+        } catch {
+            storageError = "Your data could not be cleared from this device. Please try again."
+            return false
+        }
+
+        isLoading = true
+        name = ""
+        age = ""
+        gender = nil
+        unitSystem = .imperial
+        weight = ""
+        heightFeet = ""
+        heightInches = ""
+        heightCentimeters = ""
+        diagnoses = []
+        medications = []
+        treatments = []
+        symptoms = []
+        doseRecords = []
+        bodyMeasurements = []
+        medicationRemindersEnabled = false
+        completedOnboarding = false
+        storageError = nil
+        UserDefaults.standard.removeObject(forKey: "lastSupportAffirmationSet")
+        isLoading = false
+        reminderRevision += 1
+        return true
+    }
+
     func plan(for id: String) -> TreatmentPlan {
         treatments.first { $0.id == id } ?? TreatmentPlan(id: id)
     }
