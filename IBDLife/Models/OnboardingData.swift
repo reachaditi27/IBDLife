@@ -26,7 +26,9 @@ final class OnboardingData: ObservableObject {
     @Published var treatments: [TreatmentPlan] = [] { didSet { save(); reminderRevision += 1 } }
     @Published var symptoms: [SymptomEntry] = [] { didSet { save() } }
     @Published var doseRecords: [DoseRecord] = [] { didSet { save(); reminderRevision += 1 } }
+    @Published var doseReschedules: [DoseReschedule] = [] { didSet { save(); reminderRevision += 1 } }
     @Published var bodyMeasurements: [BodyMeasurement] = [] { didSet { save() } }
+    @Published var doctorVisits: [DoctorVisit] = [] { didSet { save(); reminderRevision += 1 } }
     @Published var completedOnboarding = false { didSet { save(); reminderRevision += 1 } }
     @Published var medicationRemindersEnabled = false { didSet { save(); reminderRevision += 1 } }
     @Published var storageError: String?
@@ -44,10 +46,16 @@ final class OnboardingData: ObservableObject {
             name = data.name; age = data.age; gender = data.gender; unitSystem = data.unitSystem
             weight = data.weight; heightFeet = data.heightFeet; heightInches = data.heightInches
             heightCentimeters = data.heightCentimeters; diagnoses = data.diagnoses
-            medications = data.medications; treatments = data.treatments; symptoms = data.symptoms
+            let validMedicationIDs = Set(MedicationDatabase.medications.map(\.id))
+            medications = data.medications.filter(validMedicationIDs.contains)
+            treatments = data.treatments.filter { validMedicationIDs.contains($0.id) }
+            symptoms = data.symptoms
             doseRecords = data.doseRecords; completedOnboarding = data.completedOnboarding
+            doseReschedules = data.doseReschedules ?? []
             medicationRemindersEnabled = data.medicationRemindersEnabled ?? false
             bodyMeasurements = data.bodyMeasurements ?? []
+            doctorVisits = data.doctorVisits ?? []
+            diagnoses = diagnoses.filter { Diagnosis(rawValue: $0) != nil }
             if bodyMeasurements.isEmpty, let measurement = makeBodyMeasurement(date: savedDate(for: fileURL)) {
                 bodyMeasurements = [measurement]
             }
@@ -66,8 +74,10 @@ final class OnboardingData: ObservableObject {
         var weight: String; var heightFeet: String; var heightInches: String; var heightCentimeters: String
         var diagnoses: [String]; var medications: [String]; var treatments: [TreatmentPlan]
         var symptoms: [SymptomEntry]; var doseRecords: [DoseRecord]; var completedOnboarding: Bool
+        var doseReschedules: [DoseReschedule]?
         var medicationRemindersEnabled: Bool?
         var bodyMeasurements: [BodyMeasurement]?
+        var doctorVisits: [DoctorVisit]?
     }
 
     private func save() {
@@ -78,8 +88,10 @@ final class OnboardingData: ObservableObject {
                                     heightCentimeters: heightCentimeters, diagnoses: diagnoses,
                                     medications: medications, treatments: treatments, symptoms: symptoms,
                                     doseRecords: doseRecords, completedOnboarding: completedOnboarding,
+                                    doseReschedules: doseReschedules,
                                     medicationRemindersEnabled: medicationRemindersEnabled,
-                                    bodyMeasurements: bodyMeasurements)
+                                    bodyMeasurements: bodyMeasurements,
+                                    doctorVisits: doctorVisits)
             try FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             try JSONEncoder().encode(snapshot).write(to: fileURL, options: [.atomic, .completeFileProtectionUnlessOpen])
         } catch {
@@ -115,7 +127,9 @@ final class OnboardingData: ObservableObject {
         treatments = []
         symptoms = []
         doseRecords = []
+        doseReschedules = []
         bodyMeasurements = []
+        doctorVisits = []
         medicationRemindersEnabled = false
         completedOnboarding = false
         storageError = nil
@@ -165,12 +179,15 @@ final class OnboardingData: ObservableObject {
     func selectMedications(_ selection: [Medication]) {
         medications = selection.map(\.id)
         treatments = selection.map { plan(for: $0.id) }
+        doseReschedules.removeAll { !medications.contains($0.treatmentID) }
     }
 
     func configureSchedule(id: String, frequency: DosingFrequency?, date: Date?, alreadyTaken: Bool,
-                           lastTakenSlot: Int? = nil) {
+                           lastTakenSlot: Int? = nil, customIntervalDays: Int? = nil) {
+        doseReschedules.removeAll { $0.treatmentID == id }
         var plan = plan(for: id)
         plan.frequency = frequency
+        plan.customIntervalDays = frequency == .everyNDays ? customIntervalDays : nil
         plan.lastDoseDate = alreadyTaken ? date : nil
         plan.lastTakenSlot = alreadyTaken ? lastTakenSlot : nil
         plan.startSlot = nil
@@ -181,7 +198,7 @@ final class OnboardingData: ObservableObject {
                 plan.startSlot = frequency.slots[position + 1]
             } else {
                 plan.startDate = alreadyTaken
-                    ? Calendar.current.date(byAdding: .day, value: frequency?.intervalDays ?? 1, to: date) : date
+                    ? Calendar.current.date(byAdding: .day, value: plan.intervalDays ?? 1, to: date) : date
             }
         } else { plan.startDate = nil }
         // Only a dose the user explicitly reported is added to history, never projected doses.
@@ -196,9 +213,42 @@ final class OnboardingData: ObservableObject {
     func doses(from: Date, through: Date, includeRecorded: Bool = false) -> [ScheduledDose] {
         let recorded = Set(doseRecords.map(\.id))
         return treatments.flatMap { plan in
-            DoseSchedule.doses(for: plan, from: from, through: through, records: doseRecords)
+            DoseSchedule.doses(for: plan, from: from, through: through, records: doseRecords,
+                               reschedules: doseReschedules)
                 .filter { includeRecorded || !recorded.contains($0.id) }
         }.sorted { ($0.date, $0.slot, $0.treatmentID) < ($1.date, $1.slot, $1.treatmentID) }
+    }
+
+    func applyingReschedule(to dose: ScheduledDose) -> ScheduledDose {
+        guard let override = doseReschedules.first(where: { $0.id == dose.id }) else { return dose }
+        var adjusted = dose
+        adjusted.originalDate = dose.originalDate ?? dose.date
+        adjusted.date = Calendar.current.startOfDay(for: override.newDate)
+        return adjusted
+    }
+
+    @discardableResult
+    func rescheduleDose(_ dose: ScheduledDose, to newDate: Date, calendar: Calendar = .current) -> Bool {
+        guard !doseRecords.contains(where: { $0.id == dose.id }) else { return false }
+        let originalDate = calendar.startOfDay(for: dose.originalDate ?? dose.date)
+        let targetDate = calendar.startOfDay(for: newDate)
+        if targetDate == originalDate {
+            doseReschedules.removeAll { $0.id == dose.id }
+            return true
+        }
+        let override = DoseReschedule(id: dose.id, treatmentID: dose.treatmentID,
+                                      originalDate: originalDate, newDate: targetDate, slot: dose.slot)
+        if let index = doseReschedules.firstIndex(where: { $0.id == dose.id }) {
+            doseReschedules[index] = override
+        } else {
+            doseReschedules.append(override)
+        }
+        return true
+    }
+
+    func restoreScheduledDate(for dose: ScheduledDose) {
+        guard !doseRecords.contains(where: { $0.id == dose.id }) else { return }
+        doseReschedules.removeAll { $0.id == dose.id }
     }
 
     func upcoming(from now: Date = Date(), days: Int = 180) -> [ScheduledDose] {
@@ -235,9 +285,16 @@ final class OnboardingData: ObservableObject {
         updatePlan(plan)
     }
 
-    func addSymptom(mood: Mood, note: String) {
+    func addSymptom(mood: Mood, note: String, painLocation: PainLocation? = nil,
+                    painSeverity: Int? = nil, stoolConsistency: StoolConsistency? = nil,
+                    bowelMovementCount: Int? = nil, hasBlood: Bool? = nil, urgency: Int? = nil,
+                    fatigue: Int? = nil, sleepQuality: Int? = nil) {
         symptoms.insert(SymptomEntry(date: Date(), mood: mood,
-                                    note: note.trimmingCharacters(in: .whitespacesAndNewlines)), at: 0)
+                                    note: note.trimmingCharacters(in: .whitespacesAndNewlines),
+                                    painLocation: painLocation, painSeverity: painSeverity,
+                                    stoolConsistency: stoolConsistency,
+                                    bowelMovementCount: bowelMovementCount, hasBlood: hasBlood,
+                                    urgency: urgency, fatigue: fatigue, sleepQuality: sleepQuality), at: 0)
     }
 
     var currentBodyMeasurement: BodyMeasurement? { makeBodyMeasurement(date: Date()) }
@@ -252,7 +309,8 @@ final class OnboardingData: ObservableObject {
     private func appendBodyMeasurementIfChanged(_ measurement: BodyMeasurement) {
         if let previous = bodyMeasurements.last,
            abs(previous.weightKilograms - measurement.weightKilograms) < 0.01,
-           abs(previous.heightCentimeters - measurement.heightCentimeters) < 0.01 {
+           abs(previous.heightCentimeters - measurement.heightCentimeters) < 0.01,
+           Calendar.current.isDate(previous.date, inSameDayAs: measurement.date) {
             return
         }
         bodyMeasurements.append(measurement)

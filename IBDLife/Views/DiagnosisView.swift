@@ -38,7 +38,7 @@ struct DiagnosisView: View {
 
                 // MARK: Step
 
-                Text("STEP 2 OF 7")
+                Text("STEP 2 · CONDITION")
                     .font(.caption.weight(.bold))
                     .tracking(1.6)
                     .foregroundColor(.ibdSecondaryText)
@@ -81,11 +81,7 @@ struct DiagnosisView: View {
                 DiagnosisCard(
                     title: "Crohn's Disease",
                     description: "Inflammation anywhere along the GI tract, often in patches. Can affect the full thickness of the bowel wall.",
-                    tags: [
-                        "SMALL INTESTINE",
-                        "LARGE INTESTINE",
-                        "MOUTH TO ANUS"
-                    ],
+                    tags: [],
                     selected: onboarding.primaryDiagnosis == .crohns
                 ) {
                     selectPrimary(.crohns)
@@ -99,29 +95,10 @@ struct DiagnosisView: View {
                 DiagnosisCard(
                     title: "Ulcerative Colitis",
                     description: "Continuous inflammation of the colon and rectum. Affects only the innermost lining of the large intestine.",
-                    tags: [
-                        "COLON",
-                        "RECTUM"
-                    ],
+                    tags: [],
                     selected: onboarding.primaryDiagnosis == .ulcerativeColitis
                 ) {
                     selectPrimary(.ulcerativeColitis)
-                }
-
-                Spacer()
-                    .frame(height: 12)
-
-                // MARK: Microscopic
-
-                DiagnosisCard(
-                    title: "Microscopic Colitis",
-                    description: "Inflammation visible only under a microscope. Includes collagenous and lymphocytic colitis subtypes.",
-                    tags: [
-                        "COLON"
-                    ],
-                    selected: onboarding.primaryDiagnosis == .microscopicColitis
-                ) {
-                    selectPrimary(.microscopicColitis)
                 }
 
                 Spacer()
@@ -132,10 +109,7 @@ struct DiagnosisView: View {
                 DiagnosisCard(
                     title: "IBD Unclassified (IBDU)",
                     description: "Features of both Crohn's and UC that cannot be clearly distinguished. Sometimes called indeterminate colitis.",
-                    tags: [
-                        "COLON",
-                        "TERMINAL ILEUM"
-                    ],
+                    tags: [],
                     selected: onboarding.primaryDiagnosis == .ibdUnclassified
                 ) {
                     selectPrimary(.ibdUnclassified)

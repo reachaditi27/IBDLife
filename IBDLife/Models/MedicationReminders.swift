@@ -3,6 +3,7 @@ import Foundation
 enum MedicationReminderKind: String, Hashable {
     case dose
     case refill
+    case appointment
 }
 
 struct MedicationReminder: Identifiable, Hashable {
@@ -18,8 +19,10 @@ struct MedicationReminder: Identifiable, Hashable {
 enum MedicationReminderPlanner {
     static let maximumPending = 60
 
-    static func reminders(treatments: [TreatmentPlan], records: [DoseRecord], now: Date = Date(),
-                          calendar: Calendar = .current, horizonDays: Int = 365) -> [MedicationReminder] {
+    static func reminders(treatments: [TreatmentPlan], records: [DoseRecord],
+                          reschedules: [DoseReschedule] = [], now: Date = Date(),
+                          doctorVisits: [DoctorVisit] = [], calendar: Calendar = .current,
+                          horizonDays: Int = 365) -> [MedicationReminder] {
         let today = calendar.startOfDay(for: now)
         guard let end = calendar.date(byAdding: .day, value: horizonDays, to: today) else { return [] }
         let recordedIDs = Set(records.map(\.id))
@@ -29,7 +32,7 @@ enum MedicationReminderPlanner {
             let medicationName = plan.medication?.brandName ?? plan.id
             let doseNoun = plan.isNutrition ? "serving" : "dose"
             let doses = DoseSchedule.doses(for: plan, from: today, through: end,
-                                            records: records, calendar: calendar)
+                                            records: records, reschedules: reschedules, calendar: calendar)
                 .filter { !recordedIDs.contains($0.id) }
 
             for dose in doses {
@@ -38,8 +41,8 @@ enum MedicationReminderPlanner {
                     id: "ibdlife.dose.\(dose.id)",
                     kind: .dose,
                     date: fireDate,
-                    title: plan.isNutrition ? "Nutrition reminder" : "Medication reminder",
-                    body: "Your \(dose.timeLabel.lowercased()) \(doseNoun) of \(medicationName) is scheduled now."
+                    title: plan.isNutrition ? "Take nutrition serving" : "Take medication",
+                    body: "Take your \(dose.timeLabel.lowercased()) \(doseNoun) of \(medicationName) now."
                 ))
             }
 
@@ -64,7 +67,7 @@ enum MedicationReminderPlanner {
                     id: "ibdlife.refill.\(dose.id)",
                     kind: .refill,
                     date: fireDate,
-                    title: plan.isNutrition ? "Nutrition supply reminder" : "Refill reminder",
+                    title: plan.isNutrition ? "Order nutrition supply" : "Refill medication",
                     body: plan.isNutrition
                         ? "Your \(medicationName) supply is projected to run out soon. Plan your next order."
                         : "Your \(medicationName) supply is projected to run out soon. Contact your pharmacy or specialty mail service."
@@ -72,9 +75,20 @@ enum MedicationReminderPlanner {
             }
         }
 
+        for visit in doctorVisits where visit.date > now && visit.date <= end {
+            let reminderDate = calendar.date(byAdding: .day, value: -visit.reminderLeadDays, to: visit.date) ?? visit.date
+            guard reminderDate > now else { continue }
+            let clinician = visit.clinician.trimmingCharacters(in: .whitespacesAndNewlines)
+            reminders.append(MedicationReminder(
+                id: "ibdlife.appointment.\(visit.id.uuidString)", kind: .appointment,
+                date: reminderDate, title: "GI office visit reminder",
+                body: clinician.isEmpty ? "Your GI office visit is coming up." : "Your GI office visit with \(clinician) is coming up."
+            ))
+        }
+
         return reminders.sorted {
             if $0.date != $1.date { return $0.date < $1.date }
-            if $0.kind != $1.kind { return $0.kind == .refill }
+            if $0.kind != $1.kind { return $0.kind.rawValue < $1.kind.rawValue }
             return $0.id < $1.id
         }.prefix(maximumPending).map { $0 }
     }

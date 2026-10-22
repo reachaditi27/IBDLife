@@ -23,6 +23,7 @@ struct MedicationCalendarView: View {
     private var refillDates: [Date] {
         upcoming.filter(\.needsRefill).compactMap { calendar.date(byAdding: .day, value: -7, to: $0.date) }
     }
+    private var visitDates: [Date] { onboarding.doctorVisits.map(\.date) }
     var body: some View {
         AppPage {
             HStack {
@@ -47,17 +48,18 @@ struct MedicationCalendarView: View {
                     }
                 }
             }
-            HStack(spacing: 12) {
-                legend(onboarding.treatments.count == 1 ? "Dose day (\(onboarding.treatments.first?.medication?.brandName ?? ""))" : "Dose day", color: AppStyle.green)
-                legend("Refill reminder", color: AppStyle.refill)
-                HStack(spacing: 5) {
-                    Circle().stroke(AppStyle.green).frame(width: 12, height: 12)
-                    Text("Today").font(.system(size: 11)).foregroundStyle(AppStyle.muted)
-                }
-            }.padding(.vertical, 8)
+            LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading),
+                                GridItem(.flexible(), alignment: .leading)], spacing: 9) {
+                calendarLegend("Medication dose", marker: .medication)
+                calendarLegend("Nutrition serving", marker: .nutrition)
+                calendarLegend("Refill reminder", marker: .refill)
+                calendarLegend("GI office visit", marker: .visit)
+                calendarLegend("Today", marker: .today)
+            }
+            .padding(.vertical, 8)
             VStack(alignment: .leading, spacing: 12) {
                 HStack {
-                    AppSectionLabel(title: selectedDay.map { $0.formatted(date: .abbreviated, time: .omitted) } ?? "Upcoming doses")
+                    AppSectionLabel(title: selectedDay.map { $0.formatted(date: .abbreviated, time: .omitted) } ?? "Upcoming treatments")
                     Spacer()
                     if selectedDay != nil {
                         Button("Show all") { selectedDay = nil }.font(.system(size: 13)).foregroundStyle(AppStyle.green)
@@ -66,11 +68,12 @@ struct MedicationCalendarView: View {
                 if visibleDoses.isEmpty && !(selectedDay.map { day in
                     onboarding.doseRecords.contains { calendar.isDate($0.recordedDate, inSameDayAs: day) }
                     || refillDates.contains { calendar.isDate($0, inSameDayAs: day) }
+                    || visitDates.contains { calendar.isDate($0, inSameDayAs: day) }
                 } ?? false) {
-                    EmptyMessage(title: "No doses scheduled", detail: "Choose another date or view all upcoming doses.")
+                    EmptyMessage(title: "No treatments scheduled", detail: "Choose another date or view all upcoming medication doses and nutrition servings.")
                 }
                 ForEach(visibleDoses) { dose in
-                    NavigationLink { UpcomingDoseDetailView(dose: dose, encouragement: "Every dose is an act of strength. You're doing this.") } label: {
+                    NavigationLink { UpcomingDoseDetailView(dose: dose) } label: {
                         AppCard(padding: 16) {
                             HStack {
                                 VStack(alignment: .leading, spacing: 5) {
@@ -79,8 +82,16 @@ struct MedicationCalendarView: View {
                                         Text(onboarding.plan(for: dose.treatmentID).medication?.brandName ?? dose.treatmentID)
                                             .font(.system(size: 12)).foregroundStyle(AppStyle.muted)
                                     }
-                                    Text(dose.site.map { "Site: \($0.title)" } ?? dose.timeLabel)
+                                    let plan = onboarding.plan(for: dose.treatmentID)
+                                    Text(plan.isNutrition
+                                         ? "Nutrition serving · \(dose.timeLabel)"
+                                         : (dose.site.map { "Site: \($0.title)" } ?? "Medication dose · \(dose.timeLabel)"))
                                         .font(.system(size: 12)).foregroundStyle(AppStyle.muted)
+                                    if let originalDate = dose.originalDate {
+                                        Label("Rescheduled from \(originalDate.formatted(date: .abbreviated, time: .omitted))",
+                                              systemImage: "calendar.badge.clock")
+                                            .font(.system(size: 11, weight: .medium)).foregroundStyle(AppStyle.refill)
+                                    }
                                 }
                                 Spacer(minLength: 0)
                                 if dose.needsRefill { RefillBadge(title: "REFILL SOON") }
@@ -95,6 +106,9 @@ struct MedicationCalendarView: View {
                     }
                     if refillDates.contains(where: { calendar.isDate($0, inSameDayAs: selectedDay) }) {
                         EmptyMessage(title: "Refill reminder", detail: "Contact your pharmacy to arrange your next prescription.")
+                    }
+                    ForEach(onboarding.doctorVisits.filter { calendar.isDate($0.date, inSameDayAs: selectedDay) }) { visit in
+                        EmptyMessage(title: "GI office visit", detail: "\(visit.date.formatted(date: .omitted, time: .shortened))\(visit.clinician.isEmpty ? "" : " · \(visit.clinician)")")
                     }
                 }
             }
@@ -111,34 +125,61 @@ struct MedicationCalendarView: View {
                 .background(.white, in: Circle()).overlay(Circle().stroke(AppStyle.border))
         }.buttonStyle(.plain).accessibilityLabel(label)
     }
-    private func legend(_ text: String, color: Color) -> some View {
+    private enum CalendarMarker { case medication, nutrition, refill, visit, today }
+
+    private func calendarLegend(_ text: String, marker: CalendarMarker) -> some View {
         HStack(spacing: 5) {
-            Circle().fill(color).frame(width: 12, height: 12)
+            Group {
+                switch marker {
+                case .medication:
+                    RoundedRectangle(cornerRadius: 4).fill(AppStyle.green).frame(width: 14, height: 14)
+                case .nutrition:
+                    Capsule().fill(AppStyle.green).frame(width: 14, height: 5)
+                case .refill:
+                    Image(systemName: "plus.circle.fill").font(.system(size: 13)).foregroundStyle(AppStyle.green)
+                case .visit:
+                    Image(systemName: "calendar.badge.clock").font(.system(size: 13)).foregroundStyle(AppStyle.green)
+                case .today:
+                    Circle().stroke(AppStyle.green).frame(width: 14, height: 14)
+                }
+            }
+            .frame(width: 16, height: 16)
             Text(text).font(.system(size: 11)).foregroundStyle(AppStyle.muted)
         }
     }
     private func dayCell(_ day: Int) -> some View {
         let date = calendar.date(byAdding: .day, value: day - 1, to: month)!
-        let hasDose = monthDoses.contains { calendar.isDate($0.date, inSameDayAs: date) }
+        let doses = monthDoses.filter { calendar.isDate($0.date, inSameDayAs: date) }
+        let hasMedication = doses.contains { !onboarding.plan(for: $0.treatmentID).isNutrition }
+        let hasNutrition = doses.contains { onboarding.plan(for: $0.treatmentID).isNutrition }
         let hasRefill = refillDates.contains { calendar.isDate($0, inSameDayAs: date) }
+        let hasVisit = visitDates.contains { calendar.isDate($0, inSameDayAs: date) }
         let isToday = calendar.isDateInToday(date)
         let selected = selectedDay.map { calendar.isDate($0, inSameDayAs: date) } ?? false
         return Button { selectedDay = selected ? nil : date } label: {
-            Text("\(day)").font(.system(size: 14, weight: hasDose ? .semibold : .regular))
-                .frame(maxWidth: .infinity).frame(height: 42)
-                .foregroundStyle(hasDose ? .white : AppStyle.ink)
-                .background(hasDose ? AppStyle.green : .clear, in: RoundedRectangle(cornerRadius: 14))
+            Text("\(day)").font(.system(size: 14, weight: hasMedication ? .semibold : .regular))
+                .frame(maxWidth: .infinity).frame(height: 46)
+                .foregroundStyle(hasMedication ? .white : AppStyle.ink)
+                .background(hasMedication ? AppStyle.green : .clear, in: RoundedRectangle(cornerRadius: 14))
                 .overlay(RoundedRectangle(cornerRadius: 14).stroke(isToday || selected ? AppStyle.green : .clear, lineWidth: selected ? 2 : 1))
                 .overlay {
-                    if hasDose && (isToday || selected) {
+                    if hasMedication && (isToday || selected) {
                         RoundedRectangle(cornerRadius: 11).stroke(.white.opacity(0.8), lineWidth: 1).padding(3)
                     }
                 }
+                .overlay(alignment: .bottom) {
+                    if hasNutrition {
+                        Capsule().fill(AppStyle.green).frame(width: 13, height: 4).padding(.bottom, 4)
+                    }
+                }
                 .overlay(alignment: .topTrailing) {
-                    if hasRefill { Circle().fill(AppStyle.refill).frame(width: 5, height: 5).padding(4) }
+                    HStack(spacing: 1) {
+                        if hasVisit { Image(systemName: "calendar.badge.clock").font(.system(size: 7, weight: .bold)) }
+                        if hasRefill { Image(systemName: "plus.circle.fill").font(.system(size: 7, weight: .bold)) }
+                    }.foregroundStyle(AppStyle.green).padding(3)
                 }
         }.buttonStyle(.plain)
-            .accessibilityLabel("\(date.formatted(date: .long, time: .omitted))\(hasDose ? ", dose day" : "")\(hasRefill ? ", refill reminder" : "")")
+            .accessibilityLabel("\(date.formatted(date: .long, time: .omitted))\(hasMedication ? ", medication dose" : "")\(hasNutrition ? ", nutrition serving" : "")\(hasRefill ? ", refill reminder" : "")\(hasVisit ? ", GI office visit" : "")")
     }
 }
 

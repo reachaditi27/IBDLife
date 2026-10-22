@@ -22,7 +22,7 @@ struct ProfileView: View {
                 }
             }
             VStack(alignment: .leading, spacing: 10) {
-                sectionHeader("BMI") { BodyMeasurementEditorView() }
+                sectionHeader("BMI", actionTitle: "Add") { BodyMeasurementEditorView() }
                 AppCard(padding: 16) {
                     if let measurement = onboarding.currentBodyMeasurement {
                         HStack(alignment: .firstTextBaseline) {
@@ -45,6 +45,19 @@ struct ProfileView: View {
             VStack(alignment: .leading, spacing: 10) {
                 AppSectionLabel(title: "Reminders")
                 AppCard(padding: 15) { MedicationReminderToggle() }
+                NavigationLink { DoctorVisitsView() } label: {
+                    AppCard(padding: 15) {
+                        HStack {
+                            Label("GI office visits", systemImage: "calendar.badge.clock")
+                                .font(.system(size: 14, weight: .medium))
+                            Spacer()
+                            if !onboarding.doctorVisits.isEmpty {
+                                Text("\(onboarding.doctorVisits.count)").font(.system(size: 12)).foregroundStyle(AppStyle.muted)
+                            }
+                            Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(AppStyle.muted)
+                        }
+                    }
+                }.buttonStyle(.plain)
             }
             treatmentSummary(kind: .medication, plans: medicationPlans)
             treatmentSummary(kind: .nutrition, plans: nutritionPlans)
@@ -72,9 +85,9 @@ struct ProfileView: View {
                         }
                         AppCard(padding: 15) {
                             VStack(alignment: .leading, spacing: 5) {
-                                Text(plan.frequency?.title ?? "Not set up").font(.system(size: 14))
+                                Text(plan.scheduleTitle).font(.system(size: 14))
                                 if let last = onboarding.doseRecords.filter({ $0.treatmentID == plan.id }).map(\.recordedDate).max() {
-                                    Text("Last dose: \(last.formatted(date: .long, time: .omitted))")
+                                    Text("Last \(plan.isNutrition ? "serving" : "dose"): \(last.formatted(date: .long, time: .omitted))")
                                         .font(.system(size: 12)).foregroundStyle(AppStyle.muted)
                                 }
                             }
@@ -101,6 +114,18 @@ struct ProfileView: View {
             }
             VStack(alignment: .leading, spacing: 10) {
                 AppSectionLabel(title: "Data")
+                NavigationLink { ExportDetailsView() } label: {
+                    AppCard(padding: 15) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "square.and.arrow.up").foregroundStyle(AppStyle.green)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Export details").font(.system(size: 15, weight: .semibold))
+                                Text("Select details to share or attach in MyChart").font(.system(size: 12)).foregroundStyle(AppStyle.muted)
+                            }
+                            Spacer(); Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(AppStyle.muted)
+                        }
+                    }
+                }.buttonStyle(.plain)
                 Button {
                     showResetConfirmation = true
                 } label: {
@@ -130,7 +155,7 @@ struct ProfileView: View {
             }
             Button("Cancel", role: .cancel) { }
         } message: {
-            Text("This permanently erases your profile, conditions, treatments, reminders, dose and nutrition history, symptoms, and BMI history from this device. This cannot be undone.")
+            Text("This permanently erases your profile, conditions, treatments, reminders, GI visits, dose and nutrition history, symptoms, and BMI history from this device. This cannot be undone.")
         }
     }
 

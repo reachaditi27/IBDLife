@@ -4,6 +4,7 @@ struct TreatmentPlan: Identifiable, Codable, Hashable {
     var id: String
     var forms: Set<AdministrationForm> = []
     var frequency: DosingFrequency?
+    var customIntervalDays: Int?
     var startDate: Date?
     var lastDoseDate: Date?
     // Optional so existing version-1 saved plans still decode unchanged.
@@ -17,6 +18,15 @@ struct TreatmentPlan: Identifiable, Codable, Hashable {
     var isInjection: Bool { !forms.isDisjoint(with: [.autoInjector, .prefilledSyringe]) }
     var isNutrition: Bool { medication?.isNutrition == true }
     var orderedForms: [AdministrationForm] { AdministrationForm.allCases.filter { forms.contains($0) } }
+    var intervalDays: Int? {
+        frequency == .everyNDays ? customIntervalDays : frequency?.intervalDays
+    }
+    var scheduleTitle: String {
+        if frequency == .everyNDays, let days = customIntervalDays {
+            return "Every \(days) day\(days == 1 ? "" : "s")"
+        }
+        return frequency?.title ?? "Not set up"
+    }
 }
 
 struct BodyMeasurement: Identifiable, Codable, Hashable {
@@ -59,6 +69,37 @@ struct SymptomEntry: Identifiable, Codable {
     var date: Date
     var mood: Mood
     var note: String
+    var painLocation: PainLocation?
+    var painSeverity: Int?
+    var stoolConsistency: StoolConsistency?
+    var bowelMovementCount: Int?
+    var hasBlood: Bool?
+    var urgency: Int?
+    var fatigue: Int?
+    var sleepQuality: Int?
+}
+
+enum PainLocation: String, CaseIterable, Codable, Identifiable {
+    case none = "No pain", upper = "Upper abdomen", lower = "Lower abdomen"
+    case left = "Left side", right = "Right side", allOver = "All over"
+    var id: String { rawValue }
+}
+
+enum StoolConsistency: String, CaseIterable, Codable, Identifiable {
+    case hard = "Hard / separate pieces"
+    case formed = "Well formed"
+    case soft = "Soft / loose"
+    case watery = "Watery"
+    var id: String { rawValue }
+}
+
+struct DoctorVisit: Identifiable, Codable, Hashable {
+    var id = UUID()
+    var date: Date
+    var clinician: String
+    var location: String
+    var notes: String
+    var reminderLeadDays: Int = 1
 }
 
 struct DoseRecord: Identifiable, Codable {
@@ -70,14 +111,25 @@ struct DoseRecord: Identifiable, Codable {
     var doseNumber: Int
 }
 
+/// A local exception for one occurrence. The recurring treatment plan remains unchanged.
+struct DoseReschedule: Identifiable, Codable, Hashable {
+    let id: String
+    let treatmentID: String
+    let originalDate: Date
+    var newDate: Date
+    let slot: Int
+}
+
 struct ScheduledDose: Identifiable, Hashable {
     var treatmentID: String
     var date: Date
+    var originalDate: Date? = nil
     var slot: Int
     var ordinal: Int
     var site: InjectionSite?
     var needsRefill: Bool = false
-    var id: String { "\(treatmentID)-\(Int(date.timeIntervalSince1970))-\(slot)" }
+    var id: String { "\(treatmentID)-\(Int((originalDate ?? date).timeIntervalSince1970))-\(slot)" }
+    var isRescheduled: Bool { originalDate != nil }
     var timeLabel: String {
         switch slot {
         case 1: "Afternoon"
@@ -104,7 +156,7 @@ extension DosingFrequency {
         case .everySixWeeks: 42
         case .everyEightWeeks: 56
         case .everyTwelveWeeks: 84
-        case .asNeeded: nil
+        case .asNeeded, .everyNDays: nil
         }
     }
     var dosesPerDay: Int {
@@ -119,21 +171,29 @@ extension DosingFrequency {
 /// Calendar arithmetic keeps recurring doses on local dates across daylight saving changes.
 enum DoseSchedule {
     static func doses(for plan: TreatmentPlan, from: Date, through: Date,
-                      records: [DoseRecord], calendar: Calendar = .current) -> [ScheduledDose] {
-        guard let frequency = plan.frequency, let interval = frequency.intervalDays,
+                      records: [DoseRecord], reschedules: [DoseReschedule] = [],
+                      calendar: Calendar = .current) -> [ScheduledDose] {
+        guard let frequency = plan.frequency, let interval = plan.intervalDays,
               let anchor = plan.startDate else { return [] }
         let start = calendar.startOfDay(for: anchor)
         let lower = calendar.startOfDay(for: from)
         let upper = calendar.startOfDay(for: through)
-        guard upper >= start else { return [] }
-        let elapsed = max(0, calendar.dateComponents([.day], from: start, to: lower).day ?? 0)
+        let relevantReschedules = reschedules.filter {
+            $0.treatmentID == plan.id &&
+            ((calendar.startOfDay(for: $0.newDate) >= lower && calendar.startOfDay(for: $0.newDate) <= upper) ||
+             (calendar.startOfDay(for: $0.originalDate) >= lower && calendar.startOfDay(for: $0.originalDate) <= upper))
+        }
+        let generationLower = relevantReschedules.map { calendar.startOfDay(for: $0.originalDate) }.min().map { min(lower, $0) } ?? lower
+        let generationUpper = relevantReschedules.map { calendar.startOfDay(for: $0.originalDate) }.max().map { max(upper, $0) } ?? upper
+        guard generationUpper >= start else { return [] }
+        let elapsed = max(0, calendar.dateComponents([.day], from: start, to: generationLower).day ?? 0)
         var index = elapsed / interval
         var result: [ScheduledDose] = []
         let baseline = plan.lastDoseDate == nil ? 0 : 1
         let firstPosition = frequency.slots.firstIndex(of: plan.startSlot ?? 0) ?? 0
         let siteRecords = records.filter { $0.treatmentID == plan.id && $0.site != nil }
-        while let day = calendar.date(byAdding: .day, value: index * interval, to: start), day <= upper {
-            if day >= lower {
+        while let day = calendar.date(byAdding: .day, value: index * interval, to: start), day <= generationUpper {
+            if day >= generationLower {
                 for position in 0..<frequency.dosesPerDay {
                     if index == 0 && position < firstPosition { continue }
                     let slot = frequency.slots[position]
@@ -155,6 +215,18 @@ enum DoseSchedule {
             }
             index += 1
         }
-        return result
+        let overrides = reschedules.filter { $0.treatmentID == plan.id }.reduce(into: [String: DoseReschedule]()) {
+            $0[$1.id] = $1
+        }
+        return result.compactMap { dose in
+            var adjusted = dose
+            if let override = overrides[dose.id] {
+                adjusted.originalDate = dose.date
+                adjusted.date = calendar.startOfDay(for: override.newDate)
+            }
+            let effectiveDate = calendar.startOfDay(for: adjusted.date)
+            return effectiveDate >= lower && effectiveDate <= upper ? adjusted : nil
+        }
+        .sorted { ($0.date, $0.slot, $0.treatmentID) < ($1.date, $1.slot, $1.treatmentID) }
     }
 }

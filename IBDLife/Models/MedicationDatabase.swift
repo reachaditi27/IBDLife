@@ -2,11 +2,7 @@ import Foundation
 
 struct MedicationDatabase {
 
-    /// Originators and biosimilars that are commonly alternatives rather than separate therapies.
-    static let alternativeGroups: [[String]] = [
-        ["humira", "amjevita", "hadlima", "hyrimoz", "cyltezo"],
-        ["remicade", "inflectra", "renflexis", "avsola"]
-    ]
+    static let alternativeGroups: [[String]] = []
 
     static func selectedAlternativeGroups(in medicationIDs: Set<String>) -> [[Medication]] {
         alternativeGroups.compactMap { group in
@@ -71,69 +67,6 @@ struct MedicationDatabase {
             diagnoses: [.ulcerativeColitis, .ibdUnclassified],
             details: nil,
             displayOrder: 6
-        ),
-
-        Medication(
-            brandName: "Inflectra",
-            genericName: "infliximab-dyyb",
-            category: .biologic,
-            diagnoses: [.crohns, .ulcerativeColitis, .ibdUnclassified],
-            details: "Biosimilar",
-            displayOrder: 7
-        ),
-
-        Medication(
-            brandName: "Renflexis",
-            genericName: "infliximab-abda",
-            category: .biologic,
-            diagnoses: [.crohns, .ulcerativeColitis, .ibdUnclassified],
-            details: "Biosimilar",
-            displayOrder: 8
-        ),
-
-        Medication(
-            brandName: "Avsola",
-            genericName: "infliximab-axxq",
-            category: .biologic,
-            diagnoses: [.crohns, .ulcerativeColitis, .ibdUnclassified],
-            details: "Biosimilar",
-            displayOrder: 9
-        ),
-
-        Medication(
-            brandName: "Amjevita",
-            genericName: "adalimumab-atto",
-            category: .biologic,
-            diagnoses: [.crohns, .ulcerativeColitis, .ibdUnclassified],
-            details: "Biosimilar",
-            displayOrder: 10
-        ),
-
-        Medication(
-            brandName: "Hadlima",
-            genericName: "adalimumab-bwwd",
-            category: .biologic,
-            diagnoses: [.crohns, .ulcerativeColitis, .ibdUnclassified],
-            details: "Biosimilar",
-            displayOrder: 11
-        ),
-
-        Medication(
-            brandName: "Hyrimoz",
-            genericName: "adalimumab-adaz",
-            category: .biologic,
-            diagnoses: [.crohns, .ulcerativeColitis, .ibdUnclassified],
-            details: "Biosimilar",
-            displayOrder: 12
-        ),
-
-        Medication(
-            brandName: "Cyltezo",
-            genericName: "adalimumab-adbm",
-            category: .biologic,
-            diagnoses: [.crohns, .ulcerativeColitis, .ibdUnclassified],
-            details: "Biosimilar",
-            displayOrder: 13
         ),
 
         // MARK: - SMALL MOLECULES
@@ -350,7 +283,7 @@ struct MedicationDatabase {
         ),
 
         Medication(
-            brandName: "Kate Farms Standard 1.4",
+            brandName: "Kate Farms",
             genericName: nil,
             category: .nutrition,
             diagnoses: [.crohns, .ulcerativeColitis],

@@ -12,6 +12,7 @@ struct DosingScheduleView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var selectedFrequency: DosingFrequency?
+    @State private var customIntervalDays = ""
     @State private var hasTakenDose: Bool?
     @State private var lastTakenSlot: Int?
     @State private var doseDate: Date = Date()
@@ -69,7 +70,9 @@ struct DosingScheduleView: View {
                     // MARK: Progress
 
                     if !isProfileEdit {
-                        Text("STEP 6 OF 7")
+                        Text(medication.isNutrition
+                             ? "NUTRITION SETUP · SERVING SCHEDULE"
+                             : "MEDICATION SETUP · DOSING SCHEDULE")
                             .font(
                                 .caption.weight(.bold)
                             )
@@ -98,7 +101,7 @@ struct DosingScheduleView: View {
                                 )
                             )
 
-                        Text("dosing schedule")
+                        Text(medication.isNutrition ? "serving schedule" : "dosing schedule")
                             .font(
                                 .system(
                                     size: 32,
@@ -162,6 +165,23 @@ struct DosingScheduleView: View {
                         }
                     }
 
+                    if selectedFrequency == .everyNDays {
+                        HStack {
+                            Text("Repeat every").font(.system(size: 14, weight: .medium))
+                            TextField("5", text: $customIntervalDays)
+                                .keyboardType(.numberPad)
+                                .multilineTextAlignment(.trailing)
+                                .frame(width: 64)
+                                .padding(12)
+                                .background(.white, in: RoundedRectangle(cornerRadius: 12))
+                                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.ibdBorder))
+                                .accessibilityLabel("Custom interval in days")
+                            Text("days").font(.system(size: 14)).foregroundStyle(Color.ibdSecondaryText)
+                            Spacer()
+                        }
+                        .padding(.top, 12)
+                    }
+
                     Spacer()
                         .frame(height: 28)
 
@@ -211,9 +231,10 @@ struct DosingScheduleView: View {
 
                     if hasTakenDose == true, let selectedFrequency, selectedFrequency.dosesPerDay > 1 {
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("Which dose did you last take?").font(.subheadline.weight(.semibold))
-                            Picker("Last dose", selection: $lastTakenSlot) {
-                                Text("Choose a dose").tag(Optional<Int>.none)
+                            Text(medication.isNutrition ? "Which serving did you last have?" : "Which dose did you last take?")
+                                .font(.subheadline.weight(.semibold))
+                            Picker(medication.isNutrition ? "Last serving" : "Last dose", selection: $lastTakenSlot) {
+                                Text(medication.isNutrition ? "Choose a serving" : "Choose a dose").tag(Optional<Int>.none)
                                 ForEach(selectedFrequency.slots, id: \.self) { slot in
                                     Text(slot == 0 ? "Morning" : slot == 1 ? "Afternoon" : "Evening").tag(Optional(slot))
                                 }
@@ -228,8 +249,8 @@ struct DosingScheduleView: View {
 
                         Text(
                             hasTakenDose
-                            ? "When was your last dose?"
-                            : "When is your next scheduled dose?"
+                            ? (medication.isNutrition ? "When was your last serving?" : "When was your last dose?")
+                            : (medication.isNutrition ? "When is your next scheduled serving?" : "When is your next scheduled dose?")
                         )
                         .font(
                             .system(
@@ -326,7 +347,7 @@ struct DosingScheduleView: View {
 
                         Text(
                             hasTakenDose
-                            ? "We'll calculate your next dose from this date."
+                            ? (medication.isNutrition ? "We'll calculate your next serving from this date." : "We'll calculate your next dose from this date.")
                             : "We'll set up your schedule from this date."
                         )
                         .font(.caption)
@@ -353,6 +374,7 @@ struct DosingScheduleView: View {
         .onAppear {
             let plan = onboarding.plan(for: medication.id)
             selectedFrequency = plan.frequency
+            customIntervalDays = plan.customIntervalDays.map(String.init) ?? ""
             lastTakenSlot = plan.lastTakenSlot
             if let last = plan.lastDoseDate { hasTakenDose = true; doseDate = last }
             else if let next = plan.startDate { hasTakenDose = false; doseDate = next }
@@ -379,16 +401,12 @@ struct DosingScheduleView: View {
         // HUMIRA / ADALIMUMAB
         // ---------------------------------------------------------
 
-        case "humira",
-             "adalimumab",
-             "hyrimoz",
-             "amjevita",
-             "cyltezo",
-             "adalimumab-adbm":
+        case "humira", "adalimumab":
 
             return [
                 .weekly,
                 .everyTwoWeeks,
+                .everyNDays,
                 .asNeeded
             ]
 
@@ -396,16 +414,13 @@ struct DosingScheduleView: View {
         // REMICADE / INFLIXIMAB
         // ---------------------------------------------------------
 
-        case "remicade",
-             "infliximab",
-             "renflexis",
-             "inflectra",
-             "avsola":
+        case "remicade", "infliximab":
 
             return [
                 .everyFourWeeks,
                 .everySixWeeks,
                 .everyEightWeeks,
+                .everyNDays,
                 .asNeeded
             ]
 
@@ -419,6 +434,7 @@ struct DosingScheduleView: View {
             return [
                 .everyEightWeeks,
                 .everyTwelveWeeks,
+                .everyNDays,
                 .asNeeded
             ]
 
@@ -432,6 +448,7 @@ struct DosingScheduleView: View {
             return [
                 .everyFourWeeks,
                 .everyEightWeeks,
+                .everyNDays,
                 .asNeeded
             ]
 
@@ -442,12 +459,13 @@ struct DosingScheduleView: View {
         case "ensure plus",
              "boost plus",
              "modulen ibd",
-             "kate farms standard 1.4":
+             "kate farms":
 
             return [
                 .onceDaily,
                 .twiceDaily,
                 .threeTimesDaily,
+                .everyNDays,
                 .asNeeded
             ]
 
@@ -464,6 +482,7 @@ struct DosingScheduleView: View {
                 .everyTwoWeeks,
                 .everyFourWeeks,
                 .everyEightWeeks,
+                .everyNDays,
                 .asNeeded
             ]
         }
@@ -497,7 +516,8 @@ struct DosingScheduleView: View {
                 onboarding.configureSchedule(id: medication.id, frequency: selectedFrequency,
                                              date: selectedFrequency == .asNeeded ? nil : doseDate,
                                              alreadyTaken: selectedFrequency != .asNeeded && hasTakenDose == true,
-                                             lastTakenSlot: lastTakenSlot)
+                                             lastTakenSlot: lastTakenSlot,
+                                             customIntervalDays: Int(customIntervalDays))
                 advance()
             } label: {
 
@@ -546,7 +566,8 @@ struct DosingScheduleView: View {
 
     private var canContinue: Bool {
 
-        selectedFrequency == .asNeeded || (selectedFrequency != nil && hasTakenDose != nil &&
+        let customIntervalIsValid = selectedFrequency != .everyNDays || ((Int(customIntervalDays) ?? 0) > 0 && (Int(customIntervalDays) ?? 0) <= 365)
+        return selectedFrequency == .asNeeded || (selectedFrequency != nil && customIntervalIsValid && hasTakenDose != nil &&
             (hasTakenDose != true || (selectedFrequency?.dosesPerDay ?? 1) == 1 || lastTakenSlot != nil) &&
             (hasTakenDose == true ? doseDate <= Date() : doseDate >= Calendar.current.startOfDay(for: Date())))
     }
@@ -700,7 +721,7 @@ struct Step7PlaceholderView: View {
             spacing: 20
         ) {
 
-            Text("STEP 7 OF 7")
+            Text("SETUP COMPLETE")
                 .font(
                     .caption.weight(.bold)
                 )

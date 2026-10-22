@@ -102,7 +102,7 @@ struct MedicationAdministrationView: View {
 
                     // MARK: Step
 
-                    Text("STEP 4 OF 7")
+                    Text("STEP 4 · MEDICATION DETAILS")
                         .font(
                             .caption.weight(.bold)
                         )

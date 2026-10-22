@@ -76,7 +76,7 @@ struct HomeView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     AppSectionLabel(title: "Upcoming")
                     if upcoming.isEmpty {
-                        EmptyMessage(title: "No upcoming doses", detail: "Your treatment schedules will appear here once set up in My Profile.")
+                        EmptyMessage(title: "No upcoming treatments", detail: "Your medication doses and nutrition servings will appear here once set up in My Profile.")
                     }
                     ForEach(Array(upcoming.filter { $0.date > Calendar.current.startOfDay(for: now) }.prefix(3))) { dose in
                         NavigationLink { UpcomingDoseDetailView(dose: dose) } label: {
@@ -86,8 +86,8 @@ struct HomeView: View {
                 }
                 if !onboarding.unrecordedPastDoses(asOf: now).isEmpty {
                     VStack(alignment: .leading, spacing: 14) {
-                        AppSectionLabel(title: "Past unrecorded doses")
-                        Text("Already took a dose? Add it to your history. Older dates are available in Calendar.")
+                        AppSectionLabel(title: "Past unrecorded treatments")
+                        Text("Already took a dose or had a serving? Add it to your history. Older dates are available in Calendar.")
                             .font(.system(size: 14)).foregroundStyle(AppStyle.muted)
                         ForEach(Array(onboarding.unrecordedPastDoses(asOf: now).prefix(3))) { dose in
                             NavigationLink(value: dose) { UpcomingDoseRow(dose: dose) }.buttonStyle(.plain)
@@ -97,7 +97,7 @@ struct HomeView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     AppSectionLabel(title: "Quick actions")
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                        NavigationLink { MedicationCalendarView() } label: { quickAction("Calendar", "View all dose dates", "calendar") }
+                        NavigationLink { MedicationCalendarView() } label: { quickAction("Calendar", "View all treatment dates", "calendar") }
                         NavigationLink { ProfileView() } label: { quickAction("My Profile", "Health & treatments", "person") }
                         NavigationLink { SymptomLogView() } label: { quickAction("Symptom log", "Track how you're feeling", "pills") }
                         NavigationLink { DoseHistoryView() } label: { quickAction("Dose history", "Medication dose activity", "chart.bar.xaxis") }
@@ -173,11 +173,13 @@ struct HomeView: View {
         }
     }
     private func recordedDoseRow(_ record: DoseRecord) -> some View {
-        AppCard(padding: 15) {
+        let isNutrition = onboarding.plan(for: record.treatmentID).isNutrition
+        return AppCard(padding: 15) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(name(for: record.treatmentID)).font(.system(size: 14, weight: .medium))
-                    Text("Dose recorded").font(.system(size: 12)).foregroundStyle(AppStyle.muted)
+                    Text(isNutrition ? "Serving recorded" : "Dose recorded")
+                        .font(.system(size: 12)).foregroundStyle(AppStyle.muted)
                 }
                 Spacer()
                 Image(systemName: "checkmark.circle.fill").font(.system(size: 23)).foregroundStyle(AppStyle.green)
@@ -215,15 +217,17 @@ struct HomeView: View {
             .background(AppStyle.green, in: RoundedRectangle(cornerRadius: 17))
     }
     private func completedCard(_ record: DoseRecord) -> some View {
-        HStack(alignment: .top) {
+        let plan = onboarding.plan(for: record.treatmentID)
+        let isNutrition = plan.isNutrition
+        return HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 8) {
-                Text(onboarding.plan(for: record.treatmentID).isInjection ? "ALL DONE!" : "DOSE RECORDED").font(.system(size: 11, weight: .semibold)).tracking(1)
+                Text(plan.isInjection ? "ALL DONE!" : isNutrition ? "SERVING RECORDED" : "DOSE RECORDED").font(.system(size: 11, weight: .semibold)).tracking(1)
                 Text(name(for: record.treatmentID)).font(AppStyle.serif(22))
-                Text("Dose recorded today").font(.system(size: 13))
-                Text([record.site?.title, "Dose #\(record.doseNumber)"].compactMap { $0 }.joined(separator: " · "))
+                Text(isNutrition ? "Serving recorded today" : "Dose recorded today").font(.system(size: 13))
+                Text([record.site?.title, "\(isNutrition ? "Serving" : "Dose") #\(record.doseNumber)"].compactMap { $0 }.joined(separator: " · "))
                     .font(.system(size: 12))
                 if let next = upcoming.first(where: { $0.treatmentID == record.treatmentID }) {
-                    Text("Next dose: \(next.date.formatted(.dateTime.month(.abbreviated).day()))").font(.system(size: 13))
+                    Text("Next \(isNutrition ? "serving" : "dose"): \(next.date.formatted(.dateTime.month(.abbreviated).day()))").font(.system(size: 13))
                 }
             }
             Spacer()

@@ -37,7 +37,9 @@ final class MedicationReminderService {
                 settings.authorizationStatus == .ephemeral else { return }
 
         let reminders = MedicationReminderPlanner.reminders(treatments: store.treatments,
-                                                             records: store.doseRecords)
+                                                             records: store.doseRecords,
+                                                             reschedules: store.doseReschedules,
+                                                             doctorVisits: store.doctorVisits)
         for reminder in reminders {
             let content = UNMutableNotificationContent()
             content.title = reminder.title

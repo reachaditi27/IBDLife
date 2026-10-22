@@ -32,7 +32,7 @@ struct AboutYouView: View {
 
                 // MARK: Progress
 
-                Text("STEP 1 OF 7")
+                Text("STEP 1 · ABOUT YOU")
                     .font(.caption.weight(.bold))
                     .tracking(1.5)
                     .foregroundColor(.ibdSecondaryText)

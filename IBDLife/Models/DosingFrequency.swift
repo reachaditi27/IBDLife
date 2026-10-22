@@ -15,6 +15,7 @@ enum DosingFrequency:
     case everySixWeeks
     case everyEightWeeks
     case everyTwelveWeeks
+    case everyNDays
     case asNeeded
 
     var id: String {
@@ -52,6 +53,9 @@ enum DosingFrequency:
         case .everyTwelveWeeks:
             return "Every 12 weeks"
 
+        case .everyNDays:
+            return "Custom day interval"
+
         case .asNeeded:
             return "As needed"
         }
@@ -88,10 +92,12 @@ enum DosingFrequency:
         case .everyTwelveWeeks:
             return "Every 12 weeks"
 
+        case .everyNDays:
+            return "Choose any number of days"
+
         case .asNeeded:
             return "On-demand or flare use"
         }
     }
 }
-
 

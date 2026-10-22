@@ -49,7 +49,7 @@ struct InjectionSiteView: View {
 
                     // MARK: Progress
 
-                    Text("STEP 5 OF 7")
+                    Text("MEDICATION SETUP · INJECTION SITES")
                         .font(.caption.weight(.bold))
                         .tracking(1.5)
                         .foregroundColor(

@@ -1,8 +1,14 @@
 import SwiftUI
 
-/// Reuses the existing site and schedule screens once for each chosen treatment.
+enum TreatmentSetupCompletion {
+    case nutritionSelection
+    case finish
+}
+
+/// Reuses the existing schedule, injection-site, and supply screens for each chosen treatment.
 struct TreatmentSetupFlow: View {
     let medications: [Medication]
+    var completion: TreatmentSetupCompletion = .nutritionSelection
     @EnvironmentObject var onboarding: OnboardingData
     @Environment(\.dismiss) private var dismiss
     @State private var index = 0
@@ -11,26 +17,40 @@ struct TreatmentSetupFlow: View {
     var body: some View {
         Group {
             if index >= medications.count {
-                Step7PlaceholderView()
+                switch completion {
+                case .nutritionSelection:
+                    NutritionSelectionView(onBack: returnToLastTreatment)
+                case .finish:
+                    Step7PlaceholderView()
+                }
             } else {
                 let medication = medications[index]
                 let plan = onboarding.plan(for: medication.id)
-                if phase == 0 && plan.isInjection {
-                    InjectionSiteView(treatmentID: medication.id, onContinue: { phase = 1 }, onBack: goBack)
-                } else if phase < 2 {
-                    DosingScheduleView(medication: medication, onContinue: { phase = 2 }, onBack: goBack)
+                if phase == 0 {
+                    DosingScheduleView(
+                        medication: medication,
+                        onContinue: { phase = plan.isInjection ? 1 : 2 },
+                        onBack: goBack
+                    )
+                } else if phase == 1 {
+                    InjectionSiteView(treatmentID: medication.id, onContinue: { phase = 2 }, onBack: { phase = 0 })
                 } else {
                     DosesPerOrderEditorView(treatmentID: medication.id, isSetup: true, onComplete: {
                         index += 1; phase = 0
-                    }, onBack: { phase = 1 })
+                    }, onBack: { phase = plan.isInjection ? 1 : 0 })
                 }
             }
         }.id("\(index)-\(phase)")
     }
 
     private func goBack() {
-        if phase == 1 && onboarding.plan(for: medications[index].id).isInjection { phase = 0 }
-        else if index > 0 { index -= 1; phase = 2 }
+        if index > 0 { index -= 1; phase = 2 }
         else { dismiss() }
+    }
+
+    private func returnToLastTreatment() {
+        guard !medications.isEmpty else { dismiss(); return }
+        index = medications.count - 1
+        phase = 2
     }
 }

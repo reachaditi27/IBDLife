@@ -7,9 +7,9 @@ swiftc -parse-as-library -module-cache-path /private/tmp/IBDLifeSwiftCache IBDLi
 /private/tmp/ibdlife-model-checks
 ```
 
-Coverage includes recurrence across DST, partial-day setup, actual-site overrides,
+Coverage includes recurrence across DST, one-time dose rescheduling, partial-day setup, actual-site overrides,
 stable dose identities, historical recording, duplicate/future guards, stock,
-symptoms, condition/medication/nutrition selection, rotating support, multiple treatments, persistence, BMI calculation/history, reminder/refill planning and limits,
+GI symptom details, condition/medication/nutrition selection, rotating support, multiple treatments, persistence, dated BMI calculation/history, flexible day intervals, medication/refill/office-visit reminder planning and limits,
 local data reset, and older saved-plan compatibility.
 
 Simulator verification is described in `IMPLEMENTATION.md` at the project root.

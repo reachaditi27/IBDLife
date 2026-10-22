@@ -25,27 +25,52 @@ struct ModelChecks {
         precondition(DoseSchedule.doses(for: plan, from: september, through: september, records: [], calendar: calendar).count == 3)
         plan.frequency = .asNeeded
         precondition(DoseSchedule.doses(for: plan, from: september, through: date(2027, 1, 1), records: [], calendar: calendar).isEmpty)
+        plan.frequency = .everyNDays; plan.customIntervalDays = 5; plan.startDate = september
+        let custom = DoseSchedule.doses(for: plan, from: september, through: date(2026, 9, 18), records: [], calendar: calendar)
+        precondition(custom.map(\.date) == [september, date(2026, 9, 12), date(2026, 9, 17)], "Any-day recurrence")
 
         plan.frequency = .weekly; plan.startDate = date(2026, 3, 1)
         let dst = DoseSchedule.doses(for: plan, from: date(2026, 3, 1), through: date(2026, 3, 16), records: [], calendar: calendar)
         precondition(dst.map { calendar.component(.day, from: $0.date) } == [1, 8, 15], "Weekly dates cross DST without drifting")
         precondition(dst.allSatisfy { calendar.component(.hour, from: $0.date) == 0 })
 
+        let reschedulePlan = TreatmentPlan(id: "humira", forms: [.autoInjector], frequency: .onceDaily,
+                                           startDate: september)
+        let originalOccurrences = DoseSchedule.doses(for: reschedulePlan, from: september,
+                                                      through: date(2026, 9, 10), records: [], calendar: calendar)
+        let occurrenceToMove = originalOccurrences[1]
+        let movedDate = date(2026, 9, 10)
+        let oneTimeMove = DoseReschedule(id: occurrenceToMove.id, treatmentID: reschedulePlan.id,
+                                         originalDate: occurrenceToMove.date, newDate: movedDate,
+                                         slot: occurrenceToMove.slot)
+        let movedOccurrences = DoseSchedule.doses(for: reschedulePlan, from: september,
+                                                  through: movedDate, records: [],
+                                                  reschedules: [oneTimeMove], calendar: calendar)
+        precondition(movedOccurrences.count == originalOccurrences.count &&
+                     movedOccurrences.filter { calendar.isDate($0.date, inSameDayAs: movedDate) }.count == 2,
+                     "A one-time move changes one occurrence without changing the recurring series")
+        precondition(movedOccurrences.first { $0.id == occurrenceToMove.id }?.isRescheduled == true &&
+                     movedOccurrences.first { $0.id == occurrenceToMove.id }?.date == movedDate,
+                     "A rescheduled occurrence keeps its stable identity")
+        precondition(DoseSchedule.doses(for: reschedulePlan, from: occurrenceToMove.date,
+                                        through: occurrenceToMove.date, records: [],
+                                        reschedules: [oneTimeMove], calendar: calendar).isEmpty,
+                     "The moved occurrence leaves its original calendar date")
+
         let conditionStore = OnboardingData(fileURL: nil)
         conditionStore.setPrimaryDiagnosis(.crohns)
-        conditionStore.setAdditionalDiagnosis(.microscopicColitis, selected: true)
+        conditionStore.setAdditionalDiagnosis(.ibdUnclassified, selected: true)
         precondition(conditionStore.primaryDiagnosis == .crohns &&
-                     conditionStore.additionalDiagnoses == [.microscopicColitis],
+                     conditionStore.additionalDiagnoses == [.ibdUnclassified],
                      "Primary and uncommon additional diagnoses remain distinct")
         conditionStore.setPrimaryDiagnosis(.ulcerativeColitis, preservingAdditional: true)
         precondition(conditionStore.primaryDiagnosis == .ulcerativeColitis &&
-                     Set(conditionStore.additionalDiagnoses) == [.crohns, .microscopicColitis])
+                     Set(conditionStore.additionalDiagnoses) == [.crohns, .ibdUnclassified])
         conditionStore.removeAdditionalDiagnoses()
         precondition(conditionStore.diagnoses == [Diagnosis.ulcerativeColitis.rawValue],
                      "Returning to single-condition mode removes only additional diagnoses")
-        precondition(MedicationDatabase.selectedAlternativeGroups(in: ["humira", "amjevita"]).count == 1)
-        precondition(MedicationDatabase.selectedAlternativeGroups(in: ["humira", "stelara"]).isEmpty,
-                     "Only likely originator/biosimilar alternatives trigger a selection notice")
+        precondition(!MedicationDatabase.medications.contains { $0.details == "Biosimilar" },
+                     "Biosimilars are not presented in the medication catalog")
         precondition(MedicationDatabase.medications.first { $0.id == "ensure plus" }?.isNutrition == true)
         precondition(MedicationDatabase.medications.first { $0.id == "humira" }?.isNutrition == false,
                      "Nutrition products remain distinguishable from medication")
@@ -69,9 +94,14 @@ struct ModelChecks {
                                           startDate: september)
         let nutritionReminder = MedicationReminderPlanner.reminders(treatments: [nutritionPlan], records: [],
                                                                      now: reminderNow, calendar: calendar).first
-        precondition(nutritionReminder?.title == "Nutrition reminder" &&
+        precondition(nutritionReminder?.title == "Take nutrition serving" &&
                      nutritionReminder?.body.contains("serving") == true,
                      "Nutrition notifications are not labeled as medication")
+        let visit = DoctorVisit(date: date(2026, 9, 10), clinician: "Dr. Test", location: "GI office", notes: "", reminderLeadDays: 1)
+        let visitReminder = MedicationReminderPlanner.reminders(treatments: [], records: [], now: reminderNow,
+                                                                 doctorVisits: [visit], calendar: calendar).first
+        precondition(visitReminder?.kind == .appointment && visitReminder?.title == "GI office visit reminder",
+                     "GI visits produce a clearly labeled reminder")
         precondition(Set(reminders.map(\.id)).count == reminders.count, "Reminder identifiers are stable and unique")
         let recordedFirst = DoseRecord(id: "humira-\(Int(september.timeIntervalSince1970))-0", treatmentID: "humira",
                                        scheduledDate: september, recordedDate: september, site: nil, doseNumber: 1)
@@ -79,6 +109,17 @@ struct ModelChecks {
                                                                  now: reminderNow, calendar: calendar)
         precondition(!afterRecording.contains { $0.id == "ibdlife.dose.\(recordedFirst.id)" },
                      "Recorded doses do not keep pending reminders")
+        let futureDose = DoseSchedule.doses(for: plan, from: date(2026, 9, 21), through: date(2026, 9, 21),
+                                            records: [], calendar: calendar).first!
+        let reminderMove = DoseReschedule(id: futureDose.id, treatmentID: plan.id,
+                                          originalDate: futureDose.date, newDate: date(2026, 9, 23),
+                                          slot: futureDose.slot)
+        let movedReminders = MedicationReminderPlanner.reminders(treatments: [plan], records: [],
+                                                                  reschedules: [reminderMove],
+                                                                  now: reminderNow, calendar: calendar)
+        precondition(movedReminders.first { $0.id == "ibdlife.dose.\(futureDose.id)" }?.date ==
+                     calendar.date(from: DateComponents(year: 2026, month: 9, day: 23, hour: 9)),
+                     "A one-time move reschedules its local notification")
         var depletedPlan = plan
         depletedPlan.frequency = .onceDaily; depletedPlan.dosesPerOrder = 1; depletedPlan.dosesRemaining = 0
         let depletedReminders = MedicationReminderPlanner.reminders(treatments: [depletedPlan], records: [],
@@ -118,8 +159,20 @@ struct ModelChecks {
         precondition(next.needsRefill, "Remaining supply drives refill badge")
         store.recordDose(next, site: .leftThigh)
         precondition(store.doseRecords.count == 1, "Future doses cannot be recorded")
+        let originalNutritionDate = Calendar.current.date(byAdding: .day, value: 1, to: today)!
+        let movedNutritionDate = Calendar.current.date(byAdding: .day, value: 3, to: today)!
+        let nutritionOccurrence = store.doses(from: originalNutritionDate, through: originalNutritionDate)
+            .first { $0.treatmentID == "ensure plus" }!
+        precondition(store.rescheduleDose(nutritionOccurrence, to: movedNutritionDate))
+        precondition(!store.doses(from: originalNutritionDate, through: originalNutritionDate)
+            .contains { $0.id == nutritionOccurrence.id })
+        precondition(store.doses(from: movedNutritionDate, through: movedNutritionDate)
+            .contains { $0.id == nutritionOccurrence.id && $0.isRescheduled },
+                     "The local store returns a moved occurrence on its new date")
         store.addSymptom(mood: .okay, note: "  A test note  ")
-        store.addSymptom(mood: .great, note: "")
+        store.addSymptom(mood: .great, note: "", painLocation: .lower, painSeverity: 2,
+                         stoolConsistency: .formed, bowelMovementCount: 2, hasBlood: false,
+                         urgency: 1, fatigue: 3, sleepQuality: 4)
         precondition(store.updateBodyMeasurement(unitSystem: .imperial, weight: "160",
                                                  heightFeet: "5", heightInches: "10", at: today))
         precondition(abs((store.currentBodyMeasurement?.bmi ?? 0) - 22.96) < 0.02,
@@ -129,28 +182,39 @@ struct ModelChecks {
                                                  heightFeet: "5", heightInches: "10", at: today),
                      "Valid unchanged measurements are accepted")
         precondition(store.bodyMeasurements.count == 1, "Unchanged measurements do not duplicate history")
+        let priorBMI = Calendar.current.date(byAdding: .day, value: -30, to: today)!
+        precondition(store.updateBodyMeasurement(unitSystem: .imperial, weight: "160",
+                                                 heightFeet: "5", heightInches: "10", at: priorBMI))
+        precondition(store.bodyMeasurements.count == 2, "The same BMI can be recorded on another date")
         precondition(!store.updateBodyMeasurement(unitSystem: .metric, weight: "invalid",
                                                   heightCentimeters: "170", at: today))
-        precondition(store.unitSystem == .imperial && store.weight == "160" && store.bodyMeasurements.count == 1,
+        precondition(store.unitSystem == .imperial && store.weight == "160" && store.bodyMeasurements.count == 2,
                      "Invalid measurement edits do not replace saved values")
         store.medicationRemindersEnabled = true
+        store.doctorVisits = [visit]
         store.completedOnboarding = true
         let restored = OnboardingData(fileURL: temporary)
         precondition(restored.name == store.name && restored.age == "30")
         precondition(restored.treatments.count == 2 && restored.completedOnboarding)
         precondition(restored.medicationRemindersEnabled, "Reminder opt-in persists locally")
         precondition(restored.symptoms.count == 2 && restored.symptoms[1].note == "A test note")
-        precondition(restored.bodyMeasurements.count == 1 && abs(restored.bodyMeasurements[0].bmi - 22.96) < 0.02,
+        precondition(restored.symptoms.first?.fatigue == 3 && restored.symptoms.first?.sleepQuality == 4)
+        precondition(restored.doctorVisits.count == 1, "GI visits persist locally")
+        precondition(restored.bodyMeasurements.count == 2 && abs(restored.bodyMeasurements[0].bmi - 22.96) < 0.02,
                      "BMI history persists locally")
         precondition(restored.doseRecords.count == 1 && restored.plan(for: "humira").dosesRemaining == 1)
+        precondition(restored.doseReschedules.count == 1 &&
+                     restored.doseReschedules.first?.id == nutritionOccurrence.id,
+                     "One-time schedule exceptions persist locally")
         precondition(restored.doses(from: today, through: today).count == 2, "Recorded dose stays recorded after relaunch")
         precondition(restored.storageError == nil)
         UserDefaults.standard.set(2, forKey: "lastSupportAffirmationSet")
         precondition(restored.resetAllData(), "A local reset succeeds")
         precondition(!FileManager.default.fileExists(atPath: temporary.path), "Reset removes the saved snapshot")
         precondition(restored.name.isEmpty && restored.diagnoses.isEmpty && restored.treatments.isEmpty &&
-                     restored.symptoms.isEmpty && restored.doseRecords.isEmpty && restored.bodyMeasurements.isEmpty &&
-                     !restored.completedOnboarding && !restored.medicationRemindersEnabled,
+                     restored.symptoms.isEmpty && restored.doseRecords.isEmpty && restored.bodyMeasurements.isEmpty && restored.doctorVisits.isEmpty &&
+                     restored.doseReschedules.isEmpty && !restored.completedOnboarding &&
+                     !restored.medicationRemindersEnabled,
                      "Reset restores the first-launch in-memory state")
         precondition(UserDefaults.standard.object(forKey: "lastSupportAffirmationSet") == nil,
                      "Reset removes local support-screen preferences")
@@ -199,6 +263,6 @@ struct ModelChecks {
         precondition(partial.unrecordedPastDoses().count == 1)
         precondition(partial.doseRecords.last?.recordedDate == yesterday, "Historical entry keeps actual date taken")
         precondition(partial.doses(from: today, through: today).count == 2, "Historical entry leaves today's slots intact")
-        print("PASS: recurrence, DST, condition/medication/nutrition selection, rotating support, reminders/refills, BMI/history, local reset, per-day slots, site rotation, multiple treatments, explicit history, duplicate/future guards, refill counts, symptoms, and persistence")
+        print("PASS: recurrence, DST, one-time rescheduling, condition/medication/nutrition selection, rotating support, reminders/refills, BMI/history, local reset, per-day slots, site rotation, multiple treatments, explicit history, duplicate/future guards, refill counts, symptoms, and persistence")
     }
 }

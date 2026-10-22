@@ -9,6 +9,7 @@ enum AppStyle {
     static let paleGreen = Color(red: 237/255, green: 243/255, blue: 238/255)
     static let border = Color.black.opacity(0.09)
     static let refill = Color(red: 193/255, green: 126/255, blue: 99/255)
+    static let nutrition = Color(red: 176/255, green: 145/255, blue: 75/255)
     static func serif(_ size: CGFloat = 30) -> Font { .custom("Georgia-Bold", size: size, relativeTo: .title) }
     static func italic(_ size: CGFloat = 30) -> Font { .custom("Georgia-Italic", size: size, relativeTo: .title) }
 }
@@ -136,7 +137,7 @@ struct MedicationReminderToggle: View {
         )) {
             VStack(alignment: .leading, spacing: 5) {
                 Text("Treatment reminders").font(.system(size: 15, weight: .medium))
-                Text("Medication, nutrition, and supply reminders")
+                Text("Take medication, refill, nutrition, and GI visit reminders")
                     .font(.system(size: 12)).foregroundStyle(AppStyle.muted)
             }
         }

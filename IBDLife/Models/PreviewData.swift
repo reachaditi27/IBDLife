@@ -32,7 +32,9 @@ extension OnboardingData {
         plan.sites = scenario == "no-dose" ? [.leftThigh] : InjectionSite.allCases
         plan.dosesPerOrder = 2; plan.dosesRemaining = 2
         store.updatePlan(plan)
-        store.configureSchedule(id: "humira", frequency: scenario == "no-dose" ? .everyTwoWeeks : .onceDaily,
+        let medicationFrequency: DosingFrequency = scenario == "no-dose" ? .everyTwoWeeks
+            : scenario == "nutrition" ? .weekly : .onceDaily
+        store.configureSchedule(id: "humira", frequency: medicationFrequency,
                                 date: scenario == "no-dose" ? offset(-9) : offset(-1), alreadyTaken: true)
         if scenario == "nutrition" {
             var nutrition = store.plan(for: "ensure plus")
