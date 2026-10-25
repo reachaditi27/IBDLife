@@ -10,6 +10,13 @@ struct ModelChecks {
             calendar.date(from: DateComponents(year: year, month: month, day: day))!
         }
         let september = date(2026, 9, 7)
+        // Saved custom intervals are untrusted input even though the editor validates them.
+        for invalidInterval in [0, -1] {
+            let invalid = TreatmentPlan(id: "humira", frequency: .everyNDays,
+                                        customIntervalDays: invalidInterval, startDate: september)
+            precondition(DoseSchedule.doses(for: invalid, from: september, through: september,
+                                            records: [], calendar: calendar).isEmpty)
+        }
         var plan = TreatmentPlan(id: "humira", forms: [.autoInjector], frequency: .everyTwoWeeks,
                                  startDate: september, sites: [.leftThigh, .rightThigh])
         let doses = DoseSchedule.doses(for: plan, from: september, through: date(2026, 10, 6), records: [], calendar: calendar)

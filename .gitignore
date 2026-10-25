@@ -1,0 +1,23 @@
+# Local Xcode state and build output
+.DS_Store
+xcuserdata/
+*.xcuserstate
+DerivedData/
+build/
+*.xcarchive
+*.ipa
+*.dSYM/
+
+# Signing material and local configuration never belong in source control.
+*.p12
+*.p8
+*.mobileprovision
+*.provisionprofile
+.env
+.env.*
+
+# Runtime health data, exports, and local presentation drafts
+data.json
+IBDLife-Health-Summary.txt
+/Deliverables/
+/IBDLife-Medication-Catalog-Mentor-Review.pptx

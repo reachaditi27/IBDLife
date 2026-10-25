@@ -18,6 +18,8 @@ struct MedicationReminder: Identifiable, Hashable {
 /// The app refreshes this rolling window whenever locally saved treatment data changes.
 enum MedicationReminderPlanner {
     static let maximumPending = 60
+    // Only the earliest reminders are submitted. Opening the app refreshes the finite
+    // window; this is not an indefinitely running background reminder service.
 
     static func reminders(treatments: [TreatmentPlan], records: [DoseRecord],
                           reschedules: [DoseReschedule] = [], now: Date = Date(),

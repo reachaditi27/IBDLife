@@ -1,5 +1,9 @@
 # IBDLife implementation checkpoints
 
+> Historical checkpoint notes. For the current feature set and setup instructions,
+> see [README.md](README.md). The October 2026 publication review is in
+> [docs/PUBLICATION_REVIEW.md](docs/PUBLICATION_REVIEW.md).
+
 Existing SwiftUI/Xcode project; onboarding is retained. `OnboardingData` is the shared,
 local JSON store. `TreatmentPlan`, `DoseSchedule`, and explicit `DoseRecord` entries
 drive Home, Calendar, Profile, and History. No third-party dependencies or account service.

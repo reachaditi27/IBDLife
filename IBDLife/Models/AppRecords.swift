@@ -128,6 +128,8 @@ struct ScheduledDose: Identifiable, Hashable {
     var ordinal: Int
     var site: InjectionSite?
     var needsRefill: Bool = false
+    // A moved occurrence keeps its original identity so it cannot be recorded twice.
+    // The slot distinguishes morning/afternoon/evening on the same calendar day.
     var id: String { "\(treatmentID)-\(Int((originalDate ?? date).timeIntervalSince1970))-\(slot)" }
     var isRescheduled: Bool { originalDate != nil }
     var timeLabel: String {
@@ -173,7 +175,8 @@ enum DoseSchedule {
     static func doses(for plan: TreatmentPlan, from: Date, through: Date,
                       records: [DoseRecord], reschedules: [DoseReschedule] = [],
                       calendar: Calendar = .current) -> [ScheduledDose] {
-        guard let frequency = plan.frequency, let interval = plan.intervalDays,
+        // Invalid custom intervals must not divide by zero or generate an unbounded loop.
+        guard let frequency = plan.frequency, let interval = plan.intervalDays, interval > 0,
               let anchor = plan.startDate else { return [] }
         let start = calendar.startOfDay(for: anchor)
         let lower = calendar.startOfDay(for: from)
@@ -183,6 +186,8 @@ enum DoseSchedule {
             ((calendar.startOfDay(for: $0.newDate) >= lower && calendar.startOfDay(for: $0.newDate) <= upper) ||
              (calendar.startOfDay(for: $0.originalDate) >= lower && calendar.startOfDay(for: $0.originalDate) <= upper))
         }
+        // Generate original occurrences outside the visible range when an exception moves
+        // them into it; filter by the effective date only after applying those exceptions.
         let generationLower = relevantReschedules.map { calendar.startOfDay(for: $0.originalDate) }.min().map { min(lower, $0) } ?? lower
         let generationUpper = relevantReschedules.map { calendar.startOfDay(for: $0.originalDate) }.max().map { max(upper, $0) } ?? upper
         guard generationUpper >= start else { return [] }

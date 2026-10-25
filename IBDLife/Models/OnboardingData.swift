@@ -68,6 +68,8 @@ final class OnboardingData: ObservableObject {
         URL.applicationSupportDirectory.appending(path: "IBDLife/data.json")
     }
 
+    // Additive fields are optional so snapshots from earlier releases continue to decode.
+    // Unknown/invalid snapshots are preserved rather than silently replaced with empty data.
     private struct Snapshot: Codable {
         var version = 1
         var name: String; var age: String; var gender: Gender?; var unitSystem: UnitSystem
@@ -81,6 +83,8 @@ final class OnboardingData: ObservableObject {
     }
 
     private func save() {
+        // Loading/resetting assigns many @Published fields; suppress intermediate writes.
+        // After an I/O failure, preserve the original file until the user can recover it.
         guard !isLoading, let fileURL, storageError == nil else { return }
         do {
             let snapshot = Snapshot(name: name, age: age, gender: gender, unitSystem: unitSystem,
@@ -274,6 +278,8 @@ final class OnboardingData: ObservableObject {
             .sorted { ($0.date, $0.slot, $0.treatmentID) > ($1.date, $1.slot, $1.treatmentID) }
     }
 
+    /// The confirmation screen is the only normal UI entry point for recording a dose.
+    /// Forecasts never become history automatically; a duplicate must not consume stock.
     func recordDose(_ dose: ScheduledDose, site: InjectionSite?, at date: Date = Date()) {
         guard !doseRecords.contains(where: { $0.id == dose.id }),
               date <= Date(),

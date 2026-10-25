@@ -9,6 +9,7 @@ swiftc -parse-as-library -module-cache-path /private/tmp/IBDLifeSwiftCache IBDLi
 
 Coverage includes recurrence across DST, one-time dose rescheduling, partial-day setup, actual-site overrides,
 stable dose identities, historical recording, duplicate/future guards, stock,
+rejection of zero/negative custom recurrence intervals,
 GI symptom details, condition/medication/nutrition selection, rotating support, multiple treatments, persistence, dated BMI calculation/history, flexible day intervals, medication/refill/office-visit reminder planning and limits,
 local data reset, and older saved-plan compatibility.
 

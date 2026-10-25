@@ -52,6 +52,8 @@ struct ExportDetailsView: View {
     }
 
     private func prepareExport() {
+        // Preparing a file does not transmit it. The user selects a destination in ShareLink.
+        // MyChart is a possible manual destination, not an authenticated API integration.
         let url = FileManager.default.temporaryDirectory.appending(path: "IBDLife-Health-Summary.txt")
         do {
             try reportText().write(to: url, atomically: true, encoding: .utf8)

@@ -1,5 +1,7 @@
 import Foundation
 
+/// Bundled selection catalog, not a prescribing or drug-interaction engine.
+/// Diagnosis associations organize the UI; the user's clinician determines treatment.
 struct MedicationDatabase {
 
     static let alternativeGroups: [[String]] = []
